@@ -12,6 +12,22 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _load_dotenv() -> None:
+    """Minimal .env loader (no dependency): populate os.environ from a repo-root .env if present."""
+    env = REPO_ROOT / ".env"
+    if not env.exists():
+        return
+    for line in env.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+_load_dotenv()
+
+
 def data_dir() -> Path:
     root = os.environ.get("FIREWATCH_DATA_DIR")
     return Path(root) if root else REPO_ROOT / "data"
