@@ -1,0 +1,242 @@
+"""Fully-offline synthetic demo event (no network / no keys) — the `make demo` path.
+
+Builds a self-contained fire with terrain, cameras, evacuation zones, egress roads, structures, and
+a synthetic 'truth' fire from which we sample GOES/VIIRS hotspots, a camera-derived front (via the
+real detect→segment→georeference pipeline on a rendered frame), and an official perimeter. Every
+synthetic artifact is labeled as such (CLAUDE.md principle 2). This exercises the entire M1→M5 stack
+end-to-end so the pipeline, decisions, calibration, and COP JSON are all reproducible offline.
+"""
+from __future__ import annotations
+
+import warnings
+from datetime import UTC, datetime, timedelta
+
+import numpy as np
+from shapely.geometry import LineString, Point, Polygon
+
+from firewatch.forecast.engine import truth_arrival
+from firewatch.forecast.grid import synthetic_grid
+from firewatch.forecast.spread import SpreadParams, burned_mask
+from firewatch.geo import destination_point
+from firewatch.ontology.objects import (
+    Camera,
+    Fire,
+    FirePerimeter,
+    FireStatus,
+    Observation,
+    ObservationKind,
+    PerimeterSource,
+    PopulationZone,
+    Provenance,
+    RoadSegment,
+    Structure,
+    WeatherCell,
+    new_id,
+)
+from firewatch.ontology.store import Store
+from firewatch.pipeline import EventBundle
+from firewatch.terrain import DEM
+
+IGNITION = (-122.60, 38.50)
+IGN_TIME = datetime(2025, 8, 20, 18, 0, tzinfo=UTC)
+WIND_SPEED = 7.0
+WIND_DIR_TO = 62.0  # blowing toward ENE
+SYN = "synthetic-truth (labeled: not a real fire)"
+
+
+def _rect_zone(center_lonlat, half_m=500.0):
+    lon, lat = center_lonlat
+    pts = [
+        destination_point(lon, lat, 45, half_m * 1.414),
+        destination_point(lon, lat, 135, half_m * 1.414),
+        destination_point(lon, lat, 225, half_m * 1.414),
+        destination_point(lon, lat, 315, half_m * 1.414),
+    ]
+    return Polygon(pts)
+
+
+def build_demo_event(store: Store, event_id: str = "demo", n: int = 110, cell_m: float = 200.0) -> EventBundle:
+    grid = synthetic_grid(38.50, -122.60, cell_m=cell_m, n=n, wind_speed_ms=WIND_SPEED, wind_dir_to_deg=WIND_DIR_TO)
+    dem = DEM.from_grid(grid)
+
+    fire = Fire(
+        id="fire_demo", t=IGN_TIME, name="Ridge Demo Fire", discovered_at=IGN_TIME,
+        status=FireStatus.active, centroid={"type": "Point", "coordinates": list(IGNITION)},
+        ignition_estimate={"type": "Point", "coordinates": list(IGNITION)},
+    )
+
+    # the 'truth' fire (stronger, right-drifting wind) — the reference the forecast is scored against
+    truth = truth_arrival(grid, IGNITION, SpreadParams(wind_mult=1.3, wind_dir_offset_deg=12, ros_mult=1.15))
+
+    # cameras positioned to view the fire from two directions (poses aimed at ignition)
+    cams = []
+    for name, (clon, clat, _brg_from) in {
+        "Ridge-W": (-122.66, 38.48, 55.0),
+        "Ridge-S": (-122.585, 38.455, 340.0),
+    }.items():
+        cx, cy = dem.lonlat_to_local(clon, clat)
+        elev = dem.sample_local(cx, cy) + 25
+        # pan toward ignition
+        ix, iy = dem.lonlat_to_local(*IGNITION)
+        import math
+        pan = math.degrees(math.atan2(ix - cx, iy - cy)) % 360
+        R = math.hypot(ix - cx, iy - cy)
+        tilt = math.degrees(math.atan2(dem.sample_local(ix, iy) - elev, R))
+        cams.append(Camera(id=new_id("cam"), t=IGN_TIME, name=name, lat=clat, lon=clon, elev_m=elev,
+                           pan_deg=pan, tilt_deg=tilt, fov_deg=55, image_width=1280, image_height=720,
+                           network="ALERTCalifornia (synthetic)", pan_uncertainty_deg=2.0, tilt_uncertainty_deg=3.0))
+
+    # evacuation zones downwind (ENE), where the fire is heading — placed so the fire reaches them
+    # tens of minutes to a couple hours out, giving meaningful (positive) warning lead-times.
+    zones = []
+    for i, (name, pop, dist, brg, half) in enumerate([
+        ("Oakridge", 900, 2300, 58, 480),
+        ("Canyon Vista", 1800, 3700, 62, 620),
+        ("Mill Creek", 400, 5200, 74, 520),
+    ]):
+        c = destination_point(*IGNITION, brg, dist)
+        zones.append(PopulationZone(id=f"zone_{i}", t=IGN_TIME, name=name, geometry=_rect_zone(c, half), population=pop))
+
+    # egress roads (lines) leaving the zones
+    roads = []
+    a = destination_point(*IGNITION, 60, 3000)  # near the Canyon Vista / Oakridge corridor
+    roads.append(RoadSegment(id="road_0", t=IGN_TIME, name="Canyon Rd (egress E)",
+                             geometry=LineString([a, destination_point(*a, 80, 5000)]), highway="secondary"))
+    roads.append(RoadSegment(id="road_1", t=IGN_TIME, name="Ridge Rd (egress N)",
+                             geometry=LineString([a, destination_point(*a, 350, 4000)]), highway="residential"))
+
+    # structures clustered in the nearest zone
+    rng = np.random.default_rng(5)
+    structures = []
+    zc = zones[1].geom().centroid
+    for k in range(40):
+        dlon = rng.normal(0, 0.004)
+        dlat = rng.normal(0, 0.003)
+        structures.append(Structure(id=f"bldg_{k}", t=IGN_TIME,
+                                     footprint=Point(zc.x + dlon, zc.y + dlat).buffer(0.0003),
+                                     type="residential", population_est=2.6))
+
+    weather = WeatherCell(id="wx_0", t=IGN_TIME, bbox=list(grid_bbox(grid)),
+                          wind_u=WIND_SPEED * np.sin(np.radians(WIND_DIR_TO)),
+                          wind_v=WIND_SPEED * np.cos(np.radians(WIND_DIR_TO)), rh=18, temp_c=33, source="HRRR (synthetic)")
+
+    # observations sampled from truth (labeled synthetic) at increasing times
+    observations = []
+    obs_perims = []
+    for mm in (20, 40, 60, 90):
+        t = IGN_TIME + timedelta(minutes=mm)
+        mask = burned_mask(truth, mm)
+        # VIIRS/GOES hotspots
+        ii, jj = np.nonzero(mask)
+        if len(ii):
+            kind = ObservationKind.viirs if mm % 40 == 0 else ObservationKind.goes
+            sigma = 375 if kind == ObservationKind.viirs else 1800
+            sel = rng.choice(len(ii), size=min(35, len(ii)), replace=False)
+            from shapely.geometry import MultiPoint
+            pts = MultiPoint([Point(*grid.cell_to_lonlat(int(ii[k]), int(jj[k]))) for k in sel])
+            observations.append(Observation(id=new_id("obs"), t=t, fire_id=fire.id, kind=kind, geometry=pts,
+                                            provenance=Provenance(source=SYN, product=kind.value.upper(),
+                                                                  reported_uncertainty_m=sigma), reported_uncertainty_m=sigma))
+        # observed perimeter (also the map "observed" layer + scrubber)
+        poly = grid.mask_to_polygon(mask)
+        if poly is not None:
+            obs_perims.append(FirePerimeter(id=new_id("perim"), t=t, fire_id=fire.id, geometry=poly,
+                                            source=PerimeterSource.observed, confidence=1.0))
+
+    # one official IR perimeter + a camera-derived front (real detect->segment->georeference) at 60 min
+    t60 = IGN_TIME + timedelta(minutes=60)
+    poly60 = grid.mask_to_polygon(burned_mask(truth, 60))
+    if poly60 is not None:
+        observations.append(Observation(id=new_id("obs"), t=t60, fire_id=fire.id,
+                                        kind=ObservationKind.official_perimeter, geometry=poly60,
+                                        provenance=Provenance(source="NIFC (synthetic)", product="IR perimeter",
+                                                              reported_uncertainty_m=120), reported_uncertainty_m=120))
+    cam_obs = _camera_front_observation(cams[0], dem, grid, truth, 60, fire.id, t60)
+    if cam_obs is not None:
+        observations.append(cam_obs)
+
+    # persist base ontology objects
+    store.put(fire)
+    store.put_many(cams + zones + roads + structures + [weather] + obs_perims + observations)
+
+    bundle = EventBundle(
+        event_id=event_id, store=store, grid=grid, dem=dem, fire=fire,
+        ignition_lonlat=IGNITION, ignition_time=IGN_TIME, zones=zones, roads=roads,
+        structures=structures, cameras=cams, observations=observations,
+        wind={"speed_ms": WIND_SPEED, "dir_to_deg": WIND_DIR_TO, "rh_pct": 18, "temp_c": 33, "source": weather.source},
+        truth_arrival=truth,
+        note="Synthetic offline demo — terrain, fuels, wind, and 'truth' fire are simulated and labeled as such. "
+             "Not a real fire; for real events use `make replay FIRE=<id>`.",
+    )
+    return bundle
+
+
+def grid_bbox(grid):
+    corners = [grid.cell_to_lonlat(i, j) for i in (0, grid.ny - 1) for j in (0, grid.nx - 1)]
+    lons = [c[0] for c in corners]
+    lats = [c[1] for c in corners]
+    return (min(lons), min(lats), max(lons), max(lats))
+
+
+def render_camera_frame(camera: Camera, dem: DEM, grid, truth, minutes: int) -> np.ndarray:
+    """Render a plausible tower-cam frame: sky, terrain below the DEM skyline, and a smoke plume at
+    the projected fire front. Used to drive the real detect→segment→georeference pipeline in the demo."""
+    import math
+    W, H = camera.image_width, camera.image_height
+    img = np.zeros((H, W, 3), dtype=np.uint8)
+    cols = np.arange(0, W, 4)
+    from firewatch.perception.skyline import elevation_angles_to_rows, horizon_elevation_angles
+    el = horizon_elevation_angles(camera, dem, cols, max_range_m=30000, step_m=dem.cell_m * 2)
+    rows = elevation_angles_to_rows(camera, el, camera.tilt_deg)
+    horizon = np.interp(np.arange(W), cols, rows).clip(0, H - 1)
+    yy = np.arange(H)[:, None]
+    sky = yy < horizon[None, :]
+    # sky gradient (blue-ish), ground gradient (green/brown by row)
+    img[..., 0] = np.where(sky, 200, 60)   # B
+    img[..., 1] = np.where(sky, 190, 110)  # G
+    img[..., 2] = np.where(sky, 170, 90)   # R
+    grad = (yy / H * 40).astype(np.uint8)
+    img[..., 1] = np.clip(img[..., 1].astype(int) - grad.squeeze()[:, None] * ~sky, 0, 255).astype(np.uint8)
+
+    # project the fire front centroid into the image and draw a smoke plume above it
+    ii, jj = np.nonzero(burned_mask(truth, minutes))
+    if len(ii):
+        clon, clat = grid.cell_to_lonlat(int(np.median(ii)), int(np.median(jj)))
+        cx, cy = dem.lonlat_to_local(camera.lon, camera.lat)
+        fx, fy = dem.lonlat_to_local(clon, clat)
+        R = math.hypot(fx - cx, fy - cy)
+        az = math.degrees(math.atan2(fx - cx, fy - cy))
+        elev = math.degrees(math.atan2(dem.sample_local(fx, fy) - camera.elev_m, R))
+        f = (W / 2) / math.tan(math.radians(camera.fov_deg) / 2)
+        px = W / 2 + f * math.tan(math.radians(az - camera.pan_deg))
+        py = H / 2 + f * math.tan(math.radians(camera.tilt_deg - elev))
+        if 0 <= px < W:
+            XX, YY = np.meshgrid(np.arange(W), np.arange(H))
+            width = 60 + (H - YY) * 0.25  # plume widens with height
+            plume = (np.abs(XX - px) < width) & (YY < py) & (YY > py - 260)
+            rng = np.random.default_rng(minutes)
+            gray = (170 + rng.normal(0, 12, img.shape[:2])).clip(120, 220).astype(np.uint8)
+            for c in range(3):
+                img[..., c] = np.where(plume, gray, img[..., c])
+    return img
+
+
+def _camera_front_observation(camera, dem, grid, truth, minutes, fire_id, t):
+    """Run the real perception pipeline on a rendered frame to produce a camera_front Observation."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            from firewatch.perception.detect import SmokeDetector
+            from firewatch.perception.georeference import georeference_to_observation
+            from firewatch.perception.segment import PlumeSegmenter
+            frame = render_camera_frame(camera, dem, grid, truth, minutes)
+            dets = SmokeDetector().detect(frame, thresh=0.4)
+            smoke = [d for d in dets if d.label == "smoke"]
+            if not smoke:
+                return None
+            mask = PlumeSegmenter().segment(frame, smoke[0].bbox)
+            if not mask.any():
+                return None
+            return georeference_to_observation(camera, mask, dem, fire_id, t=t, n_samples=30, max_range_m=30000)
+        except Exception:
+            return None
