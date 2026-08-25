@@ -9,10 +9,26 @@ input. The contribution is **integration → assimilation → decision**: model 
 ontology of fires, sensors, and threatened assets; assimilate live observations into a *calibrated*
 forecast; and drive auditable decisions with lead-time and uncertainty.
 
-> **Status: early build, working end-to-end on an offline synthetic replay.** Numbers below the
-> "measured" heading are from the reproducible synthetic demo (`make demo`) and are labeled as such;
-> real-fire numbers are marked **target** until scored on a pre-registered fire (`docs/EVALUATION.md`).
-> Honesty over hype is a project principle, not a slogan — see `CLAUDE.md`.
+> **Status: early build, working end-to-end** — on a reproducible offline synthetic replay *and* on
+> live public data for a real active fire. Numbers below the "measured" heading are from the
+> synthetic demo (`make demo`) and are labeled as such; real-fire skill is marked **target** until
+> scored on a pre-registered retrospective (`docs/EVALUATION.md`). Honesty over hype is a project
+> principle, not a slogan — see `CLAUDE.md`.
+
+### The common operating picture
+
+The COP board (MapLibre + deck.gl), driven entirely by public data through the ontology — Observe
+(camera → detector → georeferenced front), Map (assimilated burn-probability bands, 90% region,
+observations, threatened zones/roads, camera view-cones), and Decide (ranked evacuations, egress,
+staging, exposure, NL query), with a time scrubber over the assimilation window:
+
+![FIREWATCH COP board — synthetic demo](docs/assets/cop_board.png)
+
+And the **same system on a real, currently-active fire** — located via NIFC, real terrain + NWS
+wind + OSM assets, forecasting forward from the official perimeter (purple), with real egress routes
+flagged by threat:
+
+![FIREWATCH COP board — live real fire](docs/assets/cop_board_timber.png)
 
 ---
 

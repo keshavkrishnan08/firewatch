@@ -30,7 +30,9 @@ def fetch_roads(bbox: BBox, event_id: str = "event", max_edges: int = 400) -> li
         name = row.get("name", "")
         if isinstance(name, list):
             name = name[0] if name else ""
-        roads.append(RoadSegment(id=f"road_{i}", geometry=geom, name=str(name or ""),
+        if name is None or isinstance(name, float):  # pandas NaN for unnamed OSM ways
+            name = ""
+        roads.append(RoadSegment(id=f"road_{i}", geometry=geom, name=str(name),
                                  highway=str(row.get("highway", "road"))))
     log.info("OSM roads: %d segments", len(roads))
     return roads
