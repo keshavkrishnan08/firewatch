@@ -40,11 +40,15 @@ def run_replay(fire: str = "demo", n_members: int = 60, quiet: bool = False) -> 
     bundle = build_bundle(fire, store)
 
     cfg = EnsembleConfig(n_members=n_members)
-    issue = bundle.ignition_time + timedelta(minutes=90)  # after the last observation
+    has_truth = bundle.truth_arrival is not None
+    # demo: issue after the last synthetic obs so the ablation is meaningful; live fire: forecast from now
+    issue = bundle.ignition_time + timedelta(minutes=90) if has_truth else bundle.ignition_time
     result = run_pipeline(bundle, issue, ensemble_config=cfg)
 
-    sharp = sharpening_series(bundle, [15, 30, 45, 60, 75, 90], horizon=60, cfg=EnsembleConfig(n_members=40))
-    leads = lead_time_analysis(bundle, [10, 20, 30, 45, 60, 75, 90], horizon=120, cfg=EnsembleConfig(n_members=40))
+    sharp, leads = None, []
+    if has_truth:  # the sharpening + lead-time-delta analyses need a truth reference (demo / retrospective)
+        sharp = sharpening_series(bundle, [15, 30, 45, 60, 75, 90], horizon=60, cfg=EnsembleConfig(n_members=40))
+        leads = lead_time_analysis(bundle, [10, 20, 30, 45, 60, 75, 90], horizon=120, cfg=EnsembleConfig(n_members=40))
     figs = generate_figures(bundle, result, sharp)
 
     summary = {
@@ -85,6 +89,13 @@ def _print_summary(bundle, result, summary) -> None:
     for r in result["evacuations"][:4]:
         lt = f"{r.lead_time_min:.0f}m" if r.lead_time_min is not None else "n/a"
         print(f"  EVAC  {r.target_name:<16} urgency {r.urgency:.2f}  lead {lt}  conf {r.confidence:.0%}")
+    if not summary["lead_time"]:
+        print("\n(live fire: ablation & lead-time delta require a pre-registered retrospective with a"
+              "\n perimeter time-series — see docs/EVALUATION.md. This view is the live forward forecast.)")
+        print(f"\nCOP written: {summary['cop_path']}")
+        print(f"figures: {', '.join(summary['figures'].values())}")
+        print("=" * 74)
+        return
     print("\n'Moved-the-needle' — warning lead-time before the fire arrives (ON vs OFF baseline):")
     print(f"  {'zone':<15}{'truth@':>7}{'ON lead':>9}{'OFF lead':>9}   verdict")
     for L in summary["lead_time"]:

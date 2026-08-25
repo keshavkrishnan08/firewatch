@@ -38,10 +38,13 @@ class EnsembleConfig:
 
 
 class Ensemble:
-    def __init__(self, grid: FireGrid, members: list[Member], config: EnsembleConfig):
+    def __init__(self, grid: FireGrid, members: list[Member], config: EnsembleConfig,
+                 initial_mask=None):
         self.grid = grid
         self.members = members
         self.config = config
+        #: optional already-burned mask (forecast an ongoing fire forward from its current perimeter)
+        self.initial_mask = initial_mask
 
     # ── construction ────────────────────────────────────────────────────────────
 
@@ -51,6 +54,7 @@ class Ensemble:
         grid: FireGrid,
         ignition_lonlat: tuple[float, float],
         config: EnsembleConfig | None = None,
+        initial_mask=None,
     ) -> Ensemble:
         cfg = config or EnsembleConfig()
         rng = np.random.default_rng(cfg.seed)
@@ -70,13 +74,16 @@ class Ensemble:
                 spread_cap_ms=cfg.spread_cap_ms,
             )
             members.append(Member(params=params, ignition_lonlat=(float(lon), float(lat))))
-        return cls(grid, members, cfg)
+        return cls(grid, members, cfg, initial_mask=initial_mask)
 
     # ── running ─────────────────────────────────────────────────────────────────
 
     def run(self) -> Ensemble:
         for m in self.members:
-            ign = self.grid.ignition_mask(m.ignition_lonlat, radius_m=self.config.ignition_radius_m)
+            if self.initial_mask is not None:
+                ign = self.initial_mask  # forecast forward from the current observed perimeter
+            else:
+                ign = self.grid.ignition_mask(m.ignition_lonlat, radius_m=self.config.ignition_radius_m)
             m.arrival = solve_arrival_times(self.grid, ign, m.params)
         return self
 

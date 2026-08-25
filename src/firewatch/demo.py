@@ -155,6 +155,9 @@ def build_demo_event(store: Store, event_id: str = "demo", n: int = 110, cell_m:
     if cam_obs is not None:
         observations.append(cam_obs)
 
+    # render camera frames (with detector box + plume mask overlay) for the Observe pane
+    _save_camera_frames(event_id, cams, dem, grid, truth, minutes=60)
+
     # persist base ontology objects
     store.put(fire)
     store.put_many(cams + zones + roads + structures + [weather] + obs_perims + observations)
@@ -219,6 +222,49 @@ def render_camera_frame(camera: Camera, dem: DEM, grid, truth, minutes: int) -> 
             for c in range(3):
                 img[..., c] = np.where(plume, gray, img[..., c])
     return img
+
+
+def _save_camera_frames(event_id, cams, dem, grid, truth, minutes=60):
+    """Render each camera frame, overlay the detector box + plume mask, and save for the Observe pane."""
+    from firewatch.config import EventPaths
+    from firewatch.perception.detect import SmokeDetector
+    from firewatch.perception.features import smoke_state
+    from firewatch.perception.segment import PlumeSegmenter
+
+    try:
+        import cv2
+    except Exception:
+        return
+    outdir = EventPaths(event_id).ensure().outputs / "frames"
+    outdir.mkdir(parents=True, exist_ok=True)
+    det = SmokeDetector()
+    seg = PlumeSegmenter()
+    for cam in cams:
+        try:
+            frame = render_camera_frame(cam, dem, grid, truth, minutes)
+            dets = det.detect(frame, thresh=0.4)
+            smoke = [d for d in dets if d.label == "smoke"]
+            overlay = frame.copy()
+            state = None
+            if smoke:
+                d = smoke[0]
+                mask = seg.segment(frame, d.bbox)
+                if mask.any():
+                    tint = overlay.copy()
+                    tint[mask] = (60, 130, 245)  # BGR orange tint on the plume
+                    overlay = cv2.addWeighted(tint, 0.35, overlay, 0.65, 0)
+                    state = smoke_state(mask, cam)
+                cv2.rectangle(overlay, (d.bbox[0], d.bbox[1]), (d.bbox[2], d.bbox[3]), (60, 200, 255), 2)
+                label = f"smoke {d.score:.2f} [{d.backend}]"
+                cv2.putText(overlay, label, (d.bbox[0], max(0, d.bbox[1] - 8)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (60, 200, 255), 2)
+            if state is not None:
+                cv2.putText(overlay, f"area {state.area_px}px  bearing {state.bearing_deg:.0f}  tilt {state.plume_tilt_deg:.0f}",
+                            (12, frame.shape[0] - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
+            cam.last_frame = f"frames/{cam.id}.png"
+            cv2.imwrite(str(outdir / f"{cam.id}.png"), overlay)
+        except Exception:
+            continue
 
 
 def _camera_front_observation(camera, dem, grid, truth, minutes, fire_id, t):
