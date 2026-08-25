@@ -52,11 +52,11 @@ web:
 replay:
 	$(PYTHON) -m firewatch.api.replay --fire $(FIRE)
 
-# Build the fully-offline synthetic demo event (no network / no keys needed),
-# then run the reproducible replay over it end-to-end.
+# Build + run the fully-offline synthetic demo event end-to-end (no network / no keys):
+# regenerates the COP JSON, camera frames, ablation / reliability / sharpening figures,
+# the COP preview map, and the lead-time delta.
 demo:
 	$(PYTHON) -m firewatch.cli build-demo --fire demo
-	$(PYTHON) -m firewatch.api.replay --fire demo
 
 ingest:
 	$(PYTHON) -m firewatch.cli ingest --fire $(FIRE)
