@@ -71,7 +71,7 @@ def triangulate_bearings(observations: list[tuple[float, float, float]]) -> Tria
     resid = []
     for p, d in zip(pts, dirs, strict=False):
         M = np.eye(2) - np.outer(d, d)
-        resid.append(math.sqrt(float((x - p) @ M @ (x - p))))
+        resid.append(math.sqrt(max(0.0, float((x - p) @ M @ (x - p)))))
     residual_m = float(np.mean(resid))
 
     # covariance ~ (A)^-1 scaled by residual variance -> ellipse

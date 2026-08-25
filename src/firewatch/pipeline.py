@@ -50,6 +50,7 @@ class EventBundle:
     observations: list = field(default_factory=list)
     wind: dict = field(default_factory=dict)
     truth_arrival: np.ndarray | None = None  # demo only (labeled synthetic)
+    initial_burned_mask: np.ndarray | None = None  # forecast a live fire forward from its perimeter
     note: str = ""
 
 
@@ -73,10 +74,12 @@ def run_pipeline(
 
     off = run_forecast(bundle.grid, bundle.ignition_lonlat, bundle.ignition_time,
                        observations=bundle.observations, assimilate=False,
-                       issued_at=issue_time, ensemble_config=cfg, horizons=horizons)
+                       issued_at=issue_time, ensemble_config=cfg, horizons=horizons,
+                       initial_mask=bundle.initial_burned_mask)
     on = run_forecast(bundle.grid, bundle.ignition_lonlat, bundle.ignition_time,
                       observations=bundle.observations, assimilate=True,
-                      issued_at=issue_time, ensemble_config=cfg, horizons=horizons)
+                      issued_at=issue_time, ensemble_config=cfg, horizons=horizons,
+                      initial_mask=bundle.initial_burned_mask)
 
     fc_objs = on.to_ontology(bundle.fire.id)
     bundle.store.put_many(fc_objs)
@@ -124,7 +127,8 @@ def _obs_batches(bundle: EventBundle):
 def _evolve(bundle: EventBundle, issue_offsets: list[int], *, assimilate: bool,
             cfg: EnsembleConfig, region_horizon: int, lead_horizon: int) -> list[dict]:
     """Evolve one ensemble through the issue times, assimilating obs incrementally; snapshot metrics."""
-    ens = Ensemble.generate(bundle.grid, bundle.ignition_lonlat, cfg).run()
+    ens = Ensemble.generate(bundle.grid, bundle.ignition_lonlat, cfg,
+                            initial_mask=bundle.initial_burned_mask).run()
     pf = ParticleFilter(bundle.grid) if assimilate else None
     batches = _obs_batches(bundle)
     zone_masks = {z.id: cells_in_geom(bundle.grid, z.geom()) for z in bundle.zones}
@@ -225,7 +229,8 @@ def build_cop_json(bundle, on: ForecastResult, off: ForecastResult, evacs, egres
         return out
 
     cameras = _fc([_feature({"type": "Point", "coordinates": [c.lon, c.lat]},
-                            {"id": c.id, "name": c.name, "pan": c.pan_deg, "tilt": c.tilt_deg, "fov": c.fov_deg, "network": c.network})
+                            {"id": c.id, "name": c.name, "pan": c.pan_deg, "tilt": c.tilt_deg, "fov": c.fov_deg,
+                             "network": c.network, "frame": c.last_frame})
                    for c in bundle.cameras])
     zones = _fc([_feature(z.geometry, {"id": z.id, "name": z.name, "population": z.population, "evac_status": z.evac_status}) for z in bundle.zones])
     roads = _fc([_feature(r.geometry, {"id": r.id, "name": r.name, "highway": r.highway}) for r in bundle.roads])

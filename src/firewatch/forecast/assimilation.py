@@ -193,7 +193,10 @@ class ParticleFilter:
                 midflame_factor=p.midflame_factor,
             )
             m = Member(params=jittered, ignition_lonlat=src.ignition_lonlat, weight=1.0 / n)
-            ign = self.grid.ignition_mask(m.ignition_lonlat, radius_m=ensemble.config.ignition_radius_m)
+            if ensemble.initial_mask is not None:
+                ign = ensemble.initial_mask
+            else:
+                ign = self.grid.ignition_mask(m.ignition_lonlat, radius_m=ensemble.config.ignition_radius_m)
             m.arrival = solve_arrival_times(self.grid, ign, jittered)
             new_members.append(m)
         ensemble.members = new_members
