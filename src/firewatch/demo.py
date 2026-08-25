@@ -192,16 +192,16 @@ def render_camera_frame(camera: Camera, dem: DEM, grid, truth, minutes: int) -> 
     el = horizon_elevation_angles(camera, dem, cols, max_range_m=30000, step_m=dem.cell_m * 2)
     rows = elevation_angles_to_rows(camera, el, camera.tilt_deg)
     horizon = np.interp(np.arange(W), cols, rows).clip(0, H - 1)
-    yy = np.arange(H)[:, None]
+    yy = np.arange(H)[:, None].astype(float)
     sky = yy < horizon[None, :]
-    # sky gradient (blue-ish), ground gradient (green/brown by row)
-    img[..., 0] = np.where(sky, 200, 60)   # B
-    img[..., 1] = np.where(sky, 190, 110)  # G
-    img[..., 2] = np.where(sky, 170, 90)   # R
-    grad = (yy / H * 40).astype(np.uint8)
-    img[..., 1] = np.clip(img[..., 1].astype(int) - grad.squeeze()[:, None] * ~sky, 0, 255).astype(np.uint8)
+    # sky: blue gradient (lighter toward the horizon); ground: green→brown by row (haze near horizon)
+    depth = np.clip(yy / H, 0, 1)
+    img[..., 0] = np.where(sky, 175 + 55 * depth, 70 + 25 * depth)   # B
+    img[..., 1] = np.where(sky, 140 + 55 * depth, 105 - 25 * depth)  # G
+    img[..., 2] = np.where(sky, 95 + 60 * depth, 80 - 20 * depth)    # R
+    img = img.clip(0, 255).astype(np.uint8)
 
-    # project the fire front centroid into the image and draw a smoke plume above it
+    # project the fire front centroid into the image and draw a billowing smoke plume above it
     ii, jj = np.nonzero(burned_mask(truth, minutes))
     if len(ii):
         clon, clat = grid.cell_to_lonlat(int(np.median(ii)), int(np.median(jj)))
@@ -214,13 +214,18 @@ def render_camera_frame(camera: Camera, dem: DEM, grid, truth, minutes: int) -> 
         px = W / 2 + f * math.tan(math.radians(az - camera.pan_deg))
         py = H / 2 + f * math.tan(math.radians(camera.tilt_deg - elev))
         if 0 <= px < W:
-            XX, YY = np.meshgrid(np.arange(W), np.arange(H))
-            width = 60 + (H - YY) * 0.25  # plume widens with height
-            plume = (np.abs(XX - px) < width) & (YY < py) & (YY > py - 260)
             rng = np.random.default_rng(minutes)
-            gray = (170 + rng.normal(0, 12, img.shape[:2])).clip(120, 220).astype(np.uint8)
-            for c in range(3):
-                img[..., c] = np.where(plume, gray, img[..., c])
+            XX, YY = np.meshgrid(np.arange(W).astype(float), np.arange(H).astype(float))
+            top = py - 230
+            hnorm = np.clip((py - YY) / (py - top), 0, 1)  # 0 at base, 1 at top
+            axis = px + 55 * hnorm**1.4 + 14 * np.sin(YY / 26.0)  # lean + billow with height
+            width = 16 + 78 * hnorm + 10 * np.sin(YY / 15.0 + 1)  # narrow base -> wide top
+            r = np.abs(XX - axis) / np.maximum(width, 1)
+            softness = np.clip(1.0 - r, 0, 1) * (YY < py) * (YY > top)
+            softness *= (0.75 + 0.25 * rng.random(img.shape[:2]))  # texture
+            gray = np.full(img.shape[:2], 200.0)
+            alpha = np.clip(softness * 1.4, 0, 0.92)[..., None]
+            img = (img * (1 - alpha) + gray[..., None] * alpha).clip(0, 255).astype(np.uint8)
     return img
 
 
