@@ -1,0 +1,38 @@
+# --- python ---
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- secrets ---
+.env
+
+# --- data / caches (never commit large rasters or event snapshots) ---
+data/**
+!data/.gitkeep
+!data/events/.gitkeep
+outputs/**
+!outputs/.gitkeep
+*.tif
+*.tiff
+*.nc
+*.grib
+*.grib2
+*.parquet
+!tests/**/*.parquet
+
+# --- node / web ---
+web/node_modules/
+web/dist/
+web/.vite/
+
+# --- os ---
+.DS_Store
+Thumbs.db
