@@ -1,0 +1,51 @@
+# FIREWATCH pinned runtime + dev dependencies (Python 3.11+; verified on 3.14).
+# Regenerate intent with pyproject extras; this file pins exact versions for reproducibility (NFR-2).
+# Heavy ML perception (torch, ultralytics, sam2) is OPTIONAL — installed separately; see docs/DATA_SOURCES.md.
+
+# --- core ---
+numpy==2.5.2
+scipy==1.18.1
+pandas==3.0.5
+pydantic==2.13.4
+python-dateutil==2.9.0.post0
+requests==2.34.2
+httpx==0.28.1
+
+# --- geospatial ---
+shapely==2.1.2
+pyproj==3.7.2
+rasterio==1.5.1
+geopandas==1.1.4
+xarray==2026.7.0
+rioxarray==0.23.0
+pyarrow==25.0.1
+duckdb==1.5.5
+
+# --- satellite / weather access ---
+goes2go==2025.10.0
+herbie-data==2026.3.0
+cfgrib==0.9.15.1
+eccodes==2.47.0
+s3fs==2026.7.0
+netCDF4==1.7.4
+
+# --- assets (roads/buildings) ---
+osmnx==2.1.1
+
+# --- perception ---
+opencv-python-headless==5.0.0.93
+Pillow==12.3.0
+
+# --- numerics accel ---
+numba==0.67.0
+
+# --- serving ---
+fastapi==0.141.1
+uvicorn==0.52.4
+
+# --- viz / reporting ---
+matplotlib==3.11.1
+
+# --- dev ---
+pytest==9.1.1
+ruff==0.16.4
