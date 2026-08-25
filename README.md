@@ -62,6 +62,39 @@ make demo                    # fully-offline synthetic event, end-to-end, no key
 make replay FIRE=<event_id>  # reproduce the full picture for a real fire
 ```
 
+## Results (reproducible synthetic replay — run `make demo`)
+
+*All figures below regenerate from pinned inputs; every synthetic artifact is labeled as such.*
+
+**The thesis, measured — assimilation ON vs OFF** (perimeter IoU vs truth at each horizon), and the
+COP preview where the assimilated forecast (red) tracks the truth perimeter (dashed) while the 90%
+region (blue) stays appropriately wider:
+
+| Assimilation ablation | Common operating picture (preview) |
+|---|---|
+| ![ablation](docs/assets/ablation_iou.png) | ![cop map](docs/assets/cop_map.png) |
+
+**Calibration is first-class** (reliability diagram + Brier, pre/post temperature scaling), and the
+**forecast sharpens as observations arrive** (90%-region area shrinks, IoU rises with each cycle):
+
+| Calibration / reliability | Sharpening over time |
+|---|---|
+| ![reliability](docs/assets/reliability.png) | ![sharpening](docs/assets/sharpening.png) |
+
+**Perception → georeference** on a tower-cam frame (detector box + SAM2-style plume mask + smoke-state
+readout), and a **live COP on a real active fire** (the "Timber" fire, located via NIFC, real terrain
++ NWS wind, forecast forward from the current perimeter):
+
+| Observe pane (camera) | Live real fire (Timber) |
+|---|---|
+| ![observe](docs/assets/observe_frame.png) | ![timber](docs/assets/live_timber_cop.png) |
+
+Headline numbers on the synthetic replay: mean perimeter **IoU 0.12 → 0.56** with assimilation
+(**+0.42** at horizons beyond the last observation); the 90% region is conservatively calibrated; and
+a threatened zone is flagged **~71 min before arrival** where the no-assimilation baseline never
+flags it. These are demo (synthetic) numbers — real-fire skill requires the pre-registered
+retrospective in [`docs/EVALUATION.md`](docs/EVALUATION.md).
+
 ## Architecture (the ontology is the bus)
 
 ```
