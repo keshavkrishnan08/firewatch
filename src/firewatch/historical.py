@@ -341,6 +341,151 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 11,
     return str(out)
 
 
+def response_video(bundle, on, cfg, fps: int = 11, px: int = 640, threshold: float = 0.25,
+                   threat_km: float = 4.0) -> tuple[str, list]:
+    """Decision-response time-lapse: the forecast spreads, communities light up as they're flagged for
+    evacuation, egress routes at risk turn red — with the lead-time / confidence VALUES narrated."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import imageio.v2 as imageio
+    import matplotlib.patches as mpatches
+    import matplotlib.patheffects as pe
+    import matplotlib.pyplot as plt
+
+    from firewatch.decision.exposure import arrival_distribution, cells_in_geom
+
+    grid = bundle.grid
+    proj = grid.projector
+    ext = [grid._xs[0] / 1000, grid._xs[-1] / 1000, grid._ys[0] / 1000, grid._ys[-1] / 1000]
+    hs = _hillshade(grid.elevation, grid.cell_m)
+    ix, iy = np.array(proj.to_local(*bundle.ignition_lonlat)) / 1000
+
+    # Operational forecast: project FORWARD from the fire's observed extent at issue time (the GOES
+    # footprint) — the way an incident forecast starts from the current perimeter. Clock t=0 = issue.
+    from firewatch.forecast.engine import run_forecast
+    from firewatch.forecast.ensemble import EnsembleConfig
+    span = cfg.window_min - cfg.assim_min
+    issue_mask = burned_mask(bundle.truth_arrival, cfg.assim_min)
+    opf = run_forecast(grid, bundle.ignition_lonlat, bundle.ignition_time, assimilate=False,
+                       issued_at=bundle.ignition_time, horizons=[span], initial_mask=issue_mask,
+                       ensemble_config=EnsembleConfig(n_members=32, wind_dir_sd_deg=28, wind_mult_sd=0.35,
+                                                      ignition_sd_m=cfg.cell_m * 2))
+    ens = opf.ensemble
+
+    # A community is flagged when the forecast projects fire within a threat radius of it (warnings fire
+    # before the town itself burns). flag = minutes-after-issue it crosses threshold = the warning lead.
+    zinfo = []
+    buf_deg = threat_km * 1000.0 / 111_320.0
+    for z in bundle.zones:
+        m = cells_in_geom(grid, z.geom().centroid.buffer(buf_deg))
+        if not m.any():
+            continue
+        dist = arrival_distribution(ens, m)
+        flag = None
+        for h in np.arange(0, span + 1, 8):
+            if dist.prob_burned_by(h) >= threshold:
+                flag = float(h)
+                break
+        c = z.geom().centroid
+        cx, cy = np.array(proj.to_local(c.x, c.y)) / 1000
+        zinfo.append({"name": z.name, "xy": (cx, cy), "flag": flag, "lead": flag,
+                      "conf": float(dist.prob_burned_by(span))})
+    flagged = sorted([z for z in zinfo if z["flag"] is not None], key=lambda z: z["flag"])
+    responses = [{"zone": z["name"], "lead_min": round(z["lead"]), "confidence": round(z["conf"], 2)}
+                 for z in flagged[:6]]
+
+    subf, subf_sm = _subtitle_font(15), _subtitle_font(11, "regular")
+    shadow = [pe.withStroke(linewidth=3.0, foreground=(0, 0, 0, 0.75))]
+    from matplotlib import colormaps
+    ramp = colormaps["YlOrRd"]
+    dpi = 100
+    fig = plt.figure(figsize=(px / dpi, px / dpi), dpi=dpi, facecolor="#05070d")
+    ax = fig.add_axes([0, 0, 1, 1])
+    horizons = np.linspace(0, span, 34)
+    step = span / 33
+
+    def render(h, sub_override=None):
+        ax.clear()
+        ax.set_facecolor("#05070d")
+        ax.imshow(hs, origin="lower", cmap="gray", extent=ext, alpha=0.5, vmin=-0.2, vmax=1.2, zorder=0)
+        ax.imshow(np.where(grid.fuel == 0, 1.0, np.nan), origin="lower", extent=ext, cmap="Blues", alpha=0.16, zorder=1)
+        p = ens.burn_probability(h)
+        rgba = ramp(np.clip(p, 0, 1))
+        rgba[..., 3] = np.clip(p * 0.8, 0, 0.8)
+        ax.imshow(rgba, origin="lower", extent=ext, zorder=2, interpolation="bilinear")
+        # egress roads, red if threatened
+        for road in bundle.roads[:120]:
+            g = road.geom()
+            geoms = g.geoms if g.geom_type == "MultiLineString" else [g]
+            for ln in geoms:
+                xs, ys = proj.to_local(*np.asarray(ln.coords).T)
+                ax.plot(xs / 1000, ys / 1000, color="#5a6785", lw=0.6, alpha=0.5, zorder=3)
+        # zone markers, colored by threat status at h
+        n_flag = 0
+        for z in zinfo:
+            active = z["flag"] is not None and h >= z["flag"] - 1e-6
+            if active:
+                n_flag += 1
+            col = "#ff3b30" if active else ("#ffd23f" if (z["flag"] and h >= z["flag"] - 45) else "#7bd88f")
+            sz = (70 + 40 * (0.5 + 0.5 * np.sin(h / 10))) if active else 26
+            ax.scatter(*z["xy"], s=sz, facecolor=col, edgecolor="white", linewidths=0.6,
+                       alpha=0.95 if active else 0.6, zorder=5)
+        # callouts for the most urgent freshly-flagged zones
+        for z in flagged[:5]:
+            if z["flag"] is not None and z["flag"] - step <= h <= z["flag"] + 6 * step:
+                lead_lbl = "imminent" if z["lead"] < 1 else f"{z['lead']:.0f} min"
+                ax.annotate(f"⚠ {z['name']}\n{lead_lbl} · {z['conf']:.0%}",
+                            xy=z["xy"], xytext=(z["xy"][0] + 2.2, z["xy"][1] + 2.2),
+                            color="white", fontproperties=subf_sm, zorder=6, path_effects=shadow,
+                            arrowprops=dict(arrowstyle="-", color="#ff3b30", lw=1.2))
+        ax.plot(ix, iy, "*", color="#ffd23f", ms=16, mec="black", mew=0.5, zorder=7)
+        ax.set_xlim(ext[0], ext[1])
+        ax.set_ylim(ext[2], ext[3])
+        ax.axis("off")
+        ax.text(0.035, 0.955, "DECISION RESPONSE", transform=ax.transAxes, color="#ff6a5c",
+                fontproperties=subf_sm, va="top", path_effects=shadow)
+        ax.text(0.035, 0.915, f"T+{h:04.0f} MIN AFTER ISSUE", transform=ax.transAxes, color=NEON,
+                fontproperties=subf_sm, va="top", path_effects=shadow)
+        ax.text(0.965, 0.955, f"{n_flag} ZONE{'S' if n_flag != 1 else ''} FLAGGED", transform=ax.transAxes,
+                color="#ff3b30", fontproperties=subf_sm, ha="right", va="top", path_effects=shadow)
+        # dynamic subtitle carrying the response VALUE
+        if sub_override is not None:
+            txt = sub_override
+        else:
+            near = [z for z in flagged if z["flag"] is not None and abs(z["flag"] - h) <= step]
+            if near:
+                z = min(near, key=lambda z: z["lead"])
+                lead_lbl = "threat imminent" if z["lead"] < 1 else f"~{z['lead']:.0f} min lead"
+                txt = f"⚠ {z['name']}: recommend evacuation · {lead_lbl} · {z['conf']:.0%} confidence"
+            elif h < 25:
+                txt = "Forecast issued — projecting spread and population exposure"
+            else:
+                txt = f"{n_flag} {'community' if n_flag == 1 else 'communities'} flagged for evacuation · projecting ahead"
+        ax.add_patch(mpatches.Rectangle((0, 0), 1, 0.19, transform=ax.transAxes, zorder=8, color="#05070d", alpha=0.24))
+        ax.text(0.5, 0.105, txt, transform=ax.transAxes, ha="center", va="center", color="white",
+                fontproperties=subf, zorder=9, path_effects=shadow)
+        fig.canvas.draw()
+        return np.asarray(fig.canvas.buffer_rgba())[..., :3].copy()
+
+    frames = [render(h) for h in horizons]
+    nf = len(flagged)
+    summary = (f"{nf} {'community' if nf == 1 else 'communities'} flagged · earliest warning "
+               + ("imminent" if flagged and flagged[0]['lead'] < 1 else f"{flagged[0]['lead']:.0f} min lead")
+               if flagged else "No communities crossed the evacuation threshold in-window")
+    frames += [render(span, sub_override=summary)] * (fps + 6)
+
+    out = EventPaths(f"retro_{cfg.key}").ensure().outputs / "figures" / "response.mp4"
+    imageio.mimwrite(out, frames, fps=fps, codec="libx264", quality=9, macro_block_size=16,
+                     output_params=["-pix_fmt", "yuv420p"])
+    plt.close(fig)
+    import shutil
+
+    assets = REPO_ROOT / "docs" / "assets"
+    shutil.copy(out, assets / f"response_{cfg.key}.mp4")
+    imageio.imwrite(assets / f"response_poster_{cfg.key}.png", frames[-14])
+    return str(out), responses
+
+
 def run_historical(key: str, members: int = 28) -> dict:
     warnings.simplefilter("ignore")
     cfg = RETRO_REGISTRY[key]
@@ -365,8 +510,13 @@ def run_historical(key: str, members: int = 28) -> dict:
     try:
         vid = tracking_video(bundle, track, on, cfg, delta=delta)
     except Exception as e:  # video is a bonus; never fail the run
-        log.warning("video for %s failed: %s", cfg.key, e)
+        log.warning("tracking video for %s failed: %s", cfg.key, e)
         vid = None
+    try:
+        rvid, responses = response_video(bundle, on, cfg)
+    except Exception as e:
+        log.warning("response video for %s failed: %s", cfg.key, e)
+        rvid, responses = None, []
     result = {
         "key": cfg.key, "name": cfg.name, "start_utc": cfg.start_utc,
         "n_frames": track.n_frames, "goes_detections": track.total_detections,
@@ -377,6 +527,8 @@ def run_historical(key: str, members: int = 28) -> dict:
         "iou_off": round(float(np.mean([sf[h]["iou"] for h in cfg.horizons])), 3),
         "figure": fig, "asset": f"track_{cfg.key}.png",
         "video": vid, "video_asset": (f"track_{cfg.key}.mp4" if vid else None),
+        "response_asset": (f"response_{cfg.key}.mp4" if rvid else None),
+        "responses": responses, "n_flagged": len(responses),
         "feeds": sorted({o.provenance.source for o in bundle.observations}),
     }
     (paths.outputs / "tracking.json").write_text(json.dumps(result, indent=2, default=str))

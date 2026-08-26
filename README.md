@@ -149,11 +149,17 @@ below is a real tracking run — the fire growing, its tracked centroid path, sp
 |---|---|---|
 | ![park](docs/assets/track_park.png) | ![palisades](docs/assets/track_palisades.png) | ![eaton](docs/assets/track_eaton.png) |
 
-All three play as **sped-up time-lapse videos** (the fire growing, its tracked centroid path, the
-forecast appearing at issue time) in a light editorial page — [`docs/history.html`](docs/history.html)
-(`make history` regenerates page + videos from the runs). On all three, assimilation beats the
-no-assimilation baseline (mean perimeter IoU): Park **0.155 → 0.179**, Palisades **0.193 → 0.198**,
-Eaton **0.150 → 0.161** — consistent, honest, real-data gains.
+Each fire plays as **two sped-up time-lapse videos** (Netflix-style narrated subtitles) in a light
+editorial page — [`docs/history.html`](docs/history.html) (`make history` regenerates it):
+
+- **Satellite tracking** — the fire growing, its tracked centroid path, spread rate + heading.
+- **Decision response** — the operational forecast projecting forward from the observed perimeter,
+  **communities lighting up as they're flagged for evacuation** with lead-time + confidence values.
+  The real LA firestorm communities surface here — **Pacific Palisades**, Fernwood, Glenview (Palisades);
+  **Sierra Madre**, **Mount Wilson**, West Arcadia, Kinneloa Mesa (Eaton); Richardson Springs (Park).
+
+On all three, assimilation beats the no-assimilation baseline (mean perimeter IoU): Park
+**0.155 → 0.179**, Palisades **0.193 → 0.198**, Eaton **0.150 → 0.161** — consistent, honest, real-data gains.
 
 ### Learned models (`make train`)
 
