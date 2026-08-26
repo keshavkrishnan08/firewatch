@@ -242,8 +242,8 @@ def _save_camera_frames(event_id, cams, dem, grid, truth, minutes=60):
         return
     outdir = EventPaths(event_id).ensure().outputs / "frames"
     outdir.mkdir(parents=True, exist_ok=True)
-    det = SmokeDetector()
-    seg = PlumeSegmenter()
+    det = SmokeDetector(use_smoke_net=False)  # synthetic demo frame: classical CV
+    seg = PlumeSegmenter(use_smoke_net=False)
     for cam in cams:
         try:
             frame = render_camera_frame(cam, dem, grid, truth, minutes)
@@ -281,11 +281,11 @@ def _camera_front_observation(camera, dem, grid, truth, minutes, fire_id, t):
             from firewatch.perception.georeference import georeference_to_observation
             from firewatch.perception.segment import PlumeSegmenter
             frame = render_camera_frame(camera, dem, grid, truth, minutes)
-            dets = SmokeDetector().detect(frame, thresh=0.4)
+            dets = SmokeDetector(use_smoke_net=False).detect(frame, thresh=0.4)
             smoke = [d for d in dets if d.label == "smoke"]
             if not smoke:
                 return None
-            mask = PlumeSegmenter().segment(frame, smoke[0].bbox)
+            mask = PlumeSegmenter(use_smoke_net=False).segment(frame, smoke[0].bbox)
             if not mask.any():
                 return None
             return georeference_to_observation(camera, mask, dem, fire_id, t=t, n_samples=30, max_range_m=30000)

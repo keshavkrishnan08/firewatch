@@ -36,7 +36,7 @@ sat = ["goes2go", "herbie-data", "cfgrib", "eccodes", "s3fs", "netCDF4", "h5py",
 osm = ["osmnx>=1.9"]
 perception = ["opencv-python", "Pillow"]
 # ML: learned surrogate + real YOLO/SAM2 detection (torch has py3.14 wheels; MPS/CUDA optional):
-ml = ["torch>=2.2", "torchvision", "ultralytics", "scikit-learn"]
+ml = ["torch>=2.2", "torchvision", "ultralytics", "scikit-learn", "huggingface-hub", "imageio", "imageio-ffmpeg"]
 accel = ["numba>=0.59"]
 dev = ["pytest>=8", "ruff>=0.4", "httpx>=0.27"]
 

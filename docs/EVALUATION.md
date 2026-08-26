@@ -73,10 +73,12 @@ The protocol above has been run, not just specified:
   **~71 min** before arrival where the baseline never flags it.
 - **Georeferencing.** 0 m clear-LOS round-trip; skyline self-cal recovers a 1.5° tilt error
   (2370 m → ~0 m); 2-camera triangulation ~18 m.
-- **Learned models (`make train`).** A spread surrogate (FCN) emulates the physical MTT solver with
-  a measured val-MAE and a multi-× speedup; a smoke U-Net reaches a measured val mask-IoU. Both are
-  torch models trained by self-distillation (synthetic data, labeled); real-imagery / WildfireSpreadTS
-  weights are a drop-in. Artifacts: `outputs/ml/metrics.json` + figures.
+- **Learned models (`make train`) — trained on real data.** The spread surrogate (FCN) emulates the
+  physical MTT solver, trained on **12 real California landscapes** (real DEM + ESA WorldCover fuels;
+  reached-cell MAE ~39 min, +60-min IoU ~0.52, ~9× faster). The smoke U-Net trains on **real Pyronear
+  `pyro-sdis` wildfire imagery** (box-supervised, likelihood-refined) — val mask-IoU ~0.30, an honest
+  number on genuinely hard real smoke. Both fall back to labeled synthetic data if the sources are
+  unreachable. Artifacts: `outputs/ml/metrics.json` + figures.
 
 **Honest bar, met:** assimilation measurably beats no-assimilation (synthetic *and* real), the
 probability field is calibrated (with an honest real-fire under-coverage finding), the georeferencing

@@ -70,7 +70,7 @@ The whole point is measured skill + calibration, reproducibly:
 | **Assimilation ON vs OFF** (perimeter IoU) | the central thesis: obs sharpen the forecast | **synthetic demo:** mean IoU **0.12 → 0.56** (+0.42 beyond last obs) · **real Park Fire (GOES truth):** **+0.02 at every horizon** (honest, modest — GOES is coarse) |
 | **Calibration** (reliability, Brier, CRPS, coverage) | probabilities mean what they say | **measured** on demo *and* on the real retrospective (which honestly shows under-coverage of extreme spread) |
 | **Georeferencing** ground error vs perimeter | camera→map is accurate enough to use | **measured:** 0 m clear-LOS round-trip; skyline self-cal cuts a 1.5° tilt error's 2370 m → ~0 m; 2-cam triangulation ~18 m |
-| **Learned surrogate & smoke segmenter** | real torch models, not heuristics | **measured** (`make train`): surrogate **reached-cell MAE ~32 min**, **+60-min perimeter IoU 0.57**, **~10× faster** than MTT for a 48-member ensemble; smoke U-Net **val mask-IoU 0.94** (MPS) |
+| **Learned surrogate & smoke segmenter** | real torch models on **real** data | **measured** (`make train`): surrogate (trained on **12 real CA landscapes**) **reached-cell MAE ~39 min**, **~9× faster** than MTT; smoke U-Net (trained on **real Pyronear imagery**) **val mask-IoU 0.30** — honest on genuinely hard real smoke |
 | **Evacuation lead-time delta** | the "moved-the-needle" number | **synthetic demo:** ~71 min earlier than baseline · real-fire lead-time needs a longer/finer (VIIRS) retrospective |
 
 Everything regenerates from pinned inputs with one command:
@@ -163,13 +163,15 @@ Two **real trained torch models** (MPS/CUDA/CPU), by self-distillation — no ex
 |---|---|
 | ![surrogate](docs/assets/surrogate.png) | ![smoke net](docs/assets/smoke_net.png) |
 
-The surrogate emulates the Rothermel+MTT arrival field in one forward pass — a *fast approximate*
-prior (**reached-cell MAE ~32 min** over the 0–180 min horizon, **+60-min perimeter IoU 0.57**), and
-**~10× faster** than sequential MTT for a 48-member ensemble on a 160² grid (≈0.9 s vs ≈9.3 s); the
-assimilation loop then refines it and stays unchanged. The U-Net reaches **val mask-IoU 0.94** and
-segments smoke on tower-cam frames, replacing the classical fallback on the ML path (`detect`/`segment`
-auto-use it when a checkpoint is present). Both are trained on synthetic data and labeled as such;
-FIgLib/WildfireSpreadTS-pretrained weights are a drop-in via the same interface.
+Both models train on **real data** (`make train`). The surrogate emulates the Rothermel+MTT arrival
+field in one forward pass, trained on **12 real California landscapes** (real DEM + ESA WorldCover
+fuels; only wind/moisture are perturbed) — a *fast approximate* prior (**reached-cell MAE ~39 min** over
+0–180 min, **+60-min IoU ~0.52**), **~9× faster** than sequential MTT for an ensemble; the assimilation
+loop then refines it and stays unchanged. The smoke U-Net trains on **real Pyronear `pyro-sdis`
+imagery** (HuggingFace, keyless; box-supervised masks refined by the smoke-likelihood field) — **val
+mask-IoU 0.30**, an honest number on genuinely hard real smoke (faint plumes, clouds, weak labels). It
+replaces the classical fallback on the ML path for real frames; the offline synthetic demo uses
+classical CV. WildfireSpreadTS / SmokeyNet weights drop in via the same interface.
 
 These are demo (synthetic) headline numbers where noted — real-fire skill is the retrospective above;
 full protocol in [`docs/EVALUATION.md`](docs/EVALUATION.md).
