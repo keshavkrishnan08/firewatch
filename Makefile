@@ -72,5 +72,10 @@ train:
 retrospective:
 	$(PYTHON) -m firewatch.cli retrospective --fire $(FIRE)
 
+# Real satellite fire tracking on the registered historical fires + the futuristic page.
+history:
+	$(PYTHON) -c "from firewatch.historical import run_all; run_all()"
+	$(PYTHON) scripts/build_history_page.py docs/history.html
+
 clean:
 	rm -rf outputs/* data/events/$(FIRE)/cache 2>/dev/null || true
