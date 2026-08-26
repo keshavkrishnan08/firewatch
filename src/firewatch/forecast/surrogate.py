@@ -4,8 +4,10 @@ The surrogate is a fully-convolutional network trained by self-distillation: it 
 the Minimum-Travel-Time arrival field of the Rothermel physical model from the model's own input
 channels (ROS magnitude, head direction, eccentricity, and the ignition distance transform). At
 inference it predicts the arrival field in a single forward pass — a fast approximate prior — while
-the assimilation + calibration loop (the actual contribution) stays unchanged. Honesty (CLAUDE.md):
-this emulates *our* physical prior; pretraining on WildfireSpreadTS/Next-Day is future work.
+the assimilation + calibration loop (the actual contribution) stays unchanged. `make train` trains it
+on **real California landscapes** (real DEM + ESA WorldCover fuels sampled from `firewatch.landscapes`);
+only the wind/moisture forcings are randomized, exactly as an ensemble perturbs them. Honesty
+(CLAUDE.md): the emulation target is our physical model; WildfireSpreadTS/Next-Day pretraining is future work.
 
 Requires the `ml` extra (torch). Everything degrades gracefully if torch is absent.
 """
@@ -87,16 +89,32 @@ class SurrogateModel:
         return cls(net=net, device=dev)
 
 
-def _sample(rng, n=96):
-    """One random (input, target-arrival) training example from the physical solver."""
-    lat = 34 + rng.random() * 8
-    lon = -124 + rng.random() * 8
-    grid = synthetic_grid(lat, lon, cell_m=200.0, n=n,
-                          wind_speed_ms=float(rng.uniform(2, 14)),
-                          wind_dir_to_deg=float(rng.uniform(0, 360)),
-                          base_fuel=int(rng.choice([1, 2, 5, 10])),
-                          moisture=float(rng.uniform(0.04, 0.16)),
-                          seed=int(rng.integers(1, 1_000_000)))
+def _real_grid(item, rng, n=96):
+    """Build a FireGrid from a random window of a real (DEM + WorldCover) landscape."""
+    from firewatch.forecast.grid import FireGrid
+
+    E, F = item["elev"], item["fuel"]
+    h, w = E.shape
+    i0 = int(rng.integers(0, max(1, h - n)))
+    j0 = int(rng.integers(0, max(1, w - n)))
+    elev = E[i0:i0 + n, j0:j0 + n].astype(float)
+    fuel = F[i0:i0 + n, j0:j0 + n].astype(int)
+    ws, wd = float(rng.uniform(2, 14)), float(rng.uniform(0, 360))
+    u, v = ws * np.sin(np.radians(wd)), ws * np.cos(np.radians(wd))
+    moist = float(rng.uniform(0.04, 0.16))
+    return FireGrid(item["lat"], item["lon"], item["cell_m"], elev, fuel,
+                    np.full((n, n), u), np.full((n, n), v), np.full((n, n), moist))
+
+
+def _sample(rng, n=96, bank=None):
+    """One (input, target-arrival) example from the physical solver on a real or synthetic grid."""
+    if bank:
+        grid = _real_grid(bank[int(rng.integers(len(bank)))], rng, n)
+    else:
+        grid = synthetic_grid(34 + rng.random() * 8, -124 + rng.random() * 8, cell_m=200.0, n=n,
+                              wind_speed_ms=float(rng.uniform(2, 14)), wind_dir_to_deg=float(rng.uniform(0, 360)),
+                              base_fuel=int(rng.choice([1, 2, 5, 10])), moisture=float(rng.uniform(0.04, 0.16)),
+                              seed=int(rng.integers(1, 1_000_000)))
     ign = grid.cell_to_lonlat(n // 2 + int(rng.integers(-8, 8)), n // 2 + int(rng.integers(-8, 8)))
     arr = solve_arrival_times(grid, grid.ignition_mask(ign, radius_m=grid.cell_m), SpreadParams())
     x = input_channels(grid, ign)
@@ -104,15 +122,17 @@ def _sample(rng, n=96):
     return x, y[None]
 
 
-def train_surrogate(n_train=400, n_val=60, epochs=30, batch=8, seed=0, log=print) -> tuple[SurrogateModel, dict]:
-    """Self-distill the physical MTT solver into the CNN. Returns (model, metrics)."""
+def train_surrogate(n_train=400, n_val=60, epochs=30, batch=8, seed=0, bank=None, log=print) -> tuple[SurrogateModel, dict]:
+    """Self-distill the physical MTT solver into the CNN. If `bank` (real landscapes) is given, train
+    on real terrain + fuels; otherwise fall back to synthetic grids. Returns (model, metrics)."""
     import time
 
     import torch
 
     rng = np.random.default_rng(seed)
-    log(f"generating {n_train + n_val} physical-model samples…")
-    data = [_sample(rng) for _ in range(n_train + n_val)]
+    src = f"{len(bank)} real landscapes" if bank else "synthetic grids"
+    log(f"generating {n_train + n_val} physical-model samples on {src}…")
+    data = [_sample(rng, bank=bank) for _ in range(n_train + n_val)]
     X = torch.from_numpy(np.stack([d[0] for d in data]))
     Y = torch.from_numpy(np.stack([d[1] for d in data]))
     Xtr, Ytr, Xva, Yva = X[:n_train], Y[:n_train], X[n_train:], Y[n_train:]
@@ -168,7 +188,7 @@ def train_surrogate(n_train=400, n_val=60, epochs=30, batch=8, seed=0, log=print
     metrics = {"val_mae_min": reached_mae, "reached_mae_min": reached_mae, "perimeter_iou_60": iou60,
                "train_seconds": train_s, "device": str(dev), "ensemble_n": N, "grid_n": n,
                "surrogate_ms": t_sur * 1000, "mtt_ms": t_mtt * 1000, "speedup": t_mtt / max(t_sur, 1e-6),
-               "n_train": n_train, "epochs": epochs}
+               "n_train": n_train, "epochs": epochs, "training_data": src}
     return model, metrics
 
 

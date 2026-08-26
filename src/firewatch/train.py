@@ -31,37 +31,45 @@ def _assets_dir() -> Path:
     return d
 
 
-def train_smoke(n_train=600, epochs=12) -> dict:
-    from firewatch.perception.smoke_net import synth_smoke_frame, train_smoke_net
+def train_smoke(n_train=900, epochs=14) -> dict:
+    """Train on REAL Pyronear imagery when reachable; fall back to synthetic frames (labeled)."""
+    from firewatch.perception import smoke_net as sn
 
-    model, metrics = train_smoke_net(n_train=n_train, epochs=epochs, log=lambda m: log.info(m))
+    demo_imgs = None
+    try:
+        model, metrics = sn.train_smoke_net_real(n=n_train, epochs=epochs, log=lambda m: log.info(m))
+        demo_imgs = sn.load_pyro_sdis(n=6, n_neg=2, seed=99, log=lambda *_: None)  # real val samples
+    except Exception as e:
+        log.warning("real smoke dataset unavailable (%s) — training on synthetic frames", e)
+        model, metrics = sn.train_smoke_net(n_train=600, epochs=12, log=lambda m: log.info(m))
+        rng = np.random.default_rng(123)
+        demo_imgs = [sn.synth_smoke_frame(rng, 256, 192) for _ in range(6)]
+
     ckpt = _models_dir() / "smoke_net.pt"
     model.save(ckpt)
     metrics["checkpoint"] = str(ckpt)
 
-    # figure: validation frames with predicted mask overlay
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    rng = np.random.default_rng(123)
     fig, axes = plt.subplots(2, 3, figsize=(11, 6))
-    for ax in axes.ravel():
-        img, gt = synth_smoke_frame(rng, 256, 192)
+    for ax, (img, gt) in zip(axes.ravel(), demo_imgs, strict=False):
         pred = model.segment(img)
         rgb = img[..., ::-1].copy()
-        rgb[pred] = (0.55 * rgb[pred] + 0.45 * np.array([255, 120, 40])).astype(np.uint8)
+        rgb[pred] = (0.5 * rgb[pred] + 0.5 * np.array([255, 120, 40])).astype(np.uint8)
         ax.imshow(rgb)
         inter, union = (pred & gt).sum(), (pred | gt).sum()
         ax.set_title(f"IoU {inter/union:.2f}" if union else "no smoke", fontsize=9)
         ax.axis("off")
-    fig.suptitle(f"Learned smoke segmenter (U-Net, torch/{metrics['device']}) — val mask IoU {metrics['val_mask_iou']:.2f}")
+    fig.suptitle(f"Learned smoke segmenter (U-Net, torch/{metrics['device']}, {metrics.get('training_data','')}) "
+                 f"— val mask IoU {metrics['val_mask_iou']:.2f}")
     fig.tight_layout()
     p = _assets_dir() / "smoke_net.png"
     fig.savefig(p, dpi=120)
     plt.close(fig)
     metrics["figure"] = str(p)
-    log.info("smoke segmenter: val IoU %.3f, trained %.0fs on %s", metrics["val_mask_iou"], metrics["train_seconds"], metrics["device"])
+    log.info("smoke segmenter: val IoU %.3f on %s (%s)", metrics["val_mask_iou"], metrics["device"], metrics.get("training_data"))
     return metrics
 
 
@@ -69,8 +77,17 @@ def train_surrogate_model(n_train=400, epochs=30) -> dict:
     from firewatch.forecast.grid import synthetic_grid
     from firewatch.forecast.spread import SpreadParams, solve_arrival_times
     from firewatch.forecast.surrogate import train_surrogate
+    from firewatch.landscapes import build_landscape_bank, load_bank
 
-    model, metrics = train_surrogate(n_train=n_train, epochs=epochs, log=lambda m: log.info(m))
+    bank = load_bank()
+    if not bank:
+        try:
+            build_landscape_bank()
+            bank = load_bank()
+        except Exception as e:
+            log.warning("real-landscape bank unavailable (%s) — training on synthetic grids", e)
+            bank = None
+    model, metrics = train_surrogate(n_train=n_train, epochs=epochs, bank=bank, log=lambda m: log.info(m))
     ckpt = _models_dir() / "surrogate.pt"
     model.save(ckpt)
     metrics["checkpoint"] = str(ckpt)
@@ -101,8 +118,8 @@ def train_surrogate_model(n_train=400, epochs=30) -> dict:
     ax[2].set_title(f"reached-cell MAE {metrics['reached_mae_min']:.0f} min · +60m IoU {metrics['perimeter_iou_60']:.2f}")
     for a in ax[:2]:
         a.axis("off")
-    fig.suptitle(f"Learned spread surrogate (FCN, torch/{metrics['device']}) — {metrics['speedup']:.0f}× faster "
-                 f"than MTT for a {metrics['ensemble_n']}-member ensemble on a {metrics['grid_n']}² grid")
+    fig.suptitle(f"Learned spread surrogate (FCN, torch/{metrics['device']}, trained on {metrics.get('training_data','')}) "
+                 f"— {metrics['speedup']:.0f}× faster than MTT for a {metrics['ensemble_n']}-member ensemble")
     fig.tight_layout()
     p = _assets_dir() / "surrogate.png"
     fig.savefig(p, dpi=120)

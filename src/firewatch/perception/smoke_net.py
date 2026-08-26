@@ -1,10 +1,11 @@
 """Learned smoke segmenter (FR-PER-1/2) — a small U-Net trained on real torch.
 
 Detection/segmentation are commodity inputs (docs/LITERATURE_REVIEW.md §1–2); this provides a genuine
-*learned* torch model on the ML path (not the classical heuristic), trained by self-supervision on a
-procedurally-generated tower-cam frame set with ground-truth plume masks. It runs on MPS/CUDA/CPU and
-reports a validation mask-IoU. Honesty: it is trained on synthetic frames; FIgLib/SmokeyNet-trained
-weights (real imagery) are a drop-in replacement — the interface is identical.
+*learned* torch model on the ML path (not the classical heuristic). `make train` trains it on **real
+wildfire-camera imagery** — the Pyronear `pyro-sdis` dataset (HuggingFace, keyless) — with box-
+supervised masks refined by the smoke-likelihood field (`train_smoke_net_real`). When that dataset is
+unreachable it falls back to procedurally-generated frames (`train_smoke_net`, clearly labeled). Runs
+on MPS/CUDA/CPU and reports a validation mask-IoU; FIgLib/SmokeyNet weights are a drop-in.
 
 Requires the `ml` extra (torch). Absent torch, perception uses the classical fallback.
 """
@@ -154,6 +155,115 @@ def _dice_iou(pred, target):
     inter = (pred & target).sum()
     union = (pred | target).sum()
     return float(inter / union) if union > 0 else 1.0
+
+
+# ── real wildfire imagery: Pyronear pyro-sdis (HuggingFace, keyless) ─────────────
+
+
+def _mask_from_boxes(img_bgr, boxes, W, H):
+    """Box-supervised mask refined by the smoke-likelihood field inside each box (real weak labels)."""
+    from firewatch.perception.detect import smoke_likelihood
+
+    mask = np.zeros((H, W), dtype=bool)
+    if not boxes:
+        return mask
+    lk = smoke_likelihood(img_bgr)
+    for cx, cy, bw, bh in boxes:
+        x1, x2 = int((cx - bw / 2) * W), int((cx + bw / 2) * W)
+        y1, y2 = int((cy - bh / 2) * H), int((cy + bh / 2) * H)
+        x1, y1, x2, y2 = max(0, x1), max(0, y1), min(W, x2), min(H, y2)
+        if x2 <= x1 or y2 <= y1:
+            continue
+        sub = lk[y1:y2, x1:x2]
+        sm = sub >= max(0.35, float(np.percentile(sub, 55)))
+        if sm.sum() < 0.15 * sm.size:  # refinement too sparse -> fall back to the box
+            sm[:] = True
+        mask[y1:y2, x1:x2] |= sm
+    return mask
+
+
+def load_pyro_sdis(n=800, n_neg=200, W=256, H=192, seed=0, log=print):
+    """Load real wildfire-camera images + smoke boxes from Pyronear pyro-sdis; build (img, mask) pairs."""
+    import io
+
+    import cv2
+    import pyarrow.parquet as pq
+    from huggingface_hub import hf_hub_download
+    from PIL import Image
+
+    path = hf_hub_download("pyronear/pyro-sdis", "data/train-00000-of-00006.parquet", repo_type="dataset")
+    pf = pq.ParquetFile(path)
+    pairs, negs = [], []
+    for batch in pf.iter_batches(batch_size=64):
+        imgs = batch.column("image")
+        anns = batch.column("annotations")
+        for i in range(len(imgs)):
+            if len(pairs) >= n and len(negs) >= n_neg:
+                break
+            ann = anns[i].as_py() or ""
+            boxes = []
+            for line in ann.strip().splitlines():
+                p = line.split()
+                if len(p) == 5:
+                    boxes.append(tuple(float(v) for v in p[1:5]))
+            rec = imgs[i].as_py()
+            b = rec["bytes"] if isinstance(rec, dict) else rec
+            try:
+                im = np.asarray(Image.open(io.BytesIO(b)).convert("RGB"))[..., ::-1]  # -> BGR
+            except Exception:
+                continue
+            img = cv2.resize(im, (W, H))
+            if boxes and len(pairs) < n:
+                pairs.append((img, _mask_from_boxes(img, boxes, W, H)))
+            elif not boxes and len(negs) < n_neg:
+                negs.append((img, np.zeros((H, W), dtype=bool)))
+        if len(pairs) >= n and len(negs) >= n_neg:
+            break
+    log(f"pyro-sdis: {len(pairs)} smoke + {len(negs)} negative real images")
+    data = pairs + negs
+    np.random.default_rng(seed).shuffle(data)
+    return data
+
+
+def train_smoke_net_real(n=900, n_val=180, epochs=14, batch=16, seed=0, log=print) -> tuple[SmokeSegmenter, dict]:
+    """Train the smoke U-Net on REAL Pyronear wildfire imagery (box-supervised, likelihood-refined)."""
+    import time
+
+    import cv2
+    import torch
+
+    data = load_pyro_sdis(n=n, n_neg=n // 4, seed=seed, log=log)
+    if len(data) < 60:
+        raise RuntimeError("insufficient real images")
+    H, W = 192, 256
+    X = np.stack([cv2.resize(d[0], (W, H)).astype(np.float32).transpose(2, 0, 1) / 255.0 for d in data])
+    Y = np.stack([d[1][None].astype(np.float32) for d in data])
+    nt = len(data) - n_val
+    Xtr, Ytr = torch.from_numpy(X[:nt]), torch.from_numpy(Y[:nt])
+    Xva, Yva = torch.from_numpy(X[nt:]), torch.from_numpy(Y[nt:])
+    dev = _device()
+    net = _build_unet().to(dev)
+    opt = torch.optim.Adam(net.parameters(), lr=1e-3)
+    bce = torch.nn.BCEWithLogitsLoss()
+    t0 = time.time()
+    for ep in range(epochs):
+        net.train()
+        perm = torch.randperm(nt)
+        for i in range(0, nt, batch):
+            idx = perm[i:i + batch]
+            xb, yb = Xtr[idx].to(dev), Ytr[idx].to(dev)
+            opt.zero_grad()
+            logits = net(xb)
+            loss = bce(logits, yb) + _soft_dice_loss(torch.sigmoid(logits), yb)
+            loss.backward()
+            opt.step()
+        if (ep + 1) % 3 == 0 or ep == 0:
+            log(f"  epoch {ep+1:>2}/{epochs}  val_mask_IoU {_val_iou(net, Xva, Yva, dev):.3f}")
+    iou = _val_iou(net, Xva, Yva, dev)
+    net.eval()
+    return SmokeSegmenter(net=net, device=dev), {"val_mask_iou": iou, "train_seconds": time.time() - t0,
+                                                  "device": str(dev), "n_train": nt, "epochs": epochs,
+                                                  "training_data": "real Pyronear pyro-sdis imagery"}
 
 
 def train_smoke_net(n_train=600, n_val=120, epochs=12, batch=16, seed=0, log=print) -> tuple[SmokeSegmenter, dict]:
