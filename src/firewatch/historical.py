@@ -1,4 +1,4 @@
-"""Historical fire tracking + forecast on real GOES data — the historical-samples showcase.
+"""Historical fire tracking + forecast on real GOES data, the historical-samples showcase.
 
 For each registered real fire (retrospective.RETRO_REGISTRY) this pulls the real GOES-18 active-fire
 time-series, runs the satellite fire tracker (forecast/tracking.py), runs the assimilating forecast
@@ -74,7 +74,7 @@ def tracking_figure(bundle, track: FireTrack, on, ablation_delta: float | None, 
     # non-burnable (water/urban) faint blue
     ax.imshow(np.where(grid.fuel == 0, 1.0, np.nan), origin="lower", extent=ext, cmap="Blues", alpha=0.18)
 
-    # fire footprint growth over time (GOES-observed truth) — the tracked object growing
+    # fire footprint growth over time (GOES-observed truth), the tracked object growing
     horizons = list(range(30, cfg.window_min + 1, 30))
     norm = Normalize(0, horizons[-1])
     cmap = plt.get_cmap("inferno")
@@ -100,7 +100,7 @@ def tracking_figure(bundle, track: FireTrack, on, ablation_delta: float | None, 
         ax.annotate("", xy=path[-1] + d / (np.hypot(*d) + 1e-9) * 1.4, xytext=path[-1],
                     arrowprops=dict(arrowstyle="-|>", color=NEON, lw=2))
 
-    # assimilated forecast perimeter (ON) at the final horizon — cyan glow
+    # assimilated forecast perimeter (ON) at the final horizon, cyan glow
     fp = on.expected_perimeter.get(cfg.horizons[-1])
     if fp is not None:
         for pg in (fp.geoms if fp.geom_type == "MultiPolygon" else [fp]):
@@ -113,7 +113,7 @@ def tracking_figure(bundle, track: FireTrack, on, ablation_delta: float | None, 
     ax.plot(ix / 1000, iy / 1000, "*", color="#ffd23f", ms=20, mec="black", mew=0.6, zorder=6)
     ax.set_xlabel("km E", color="#7a8699")
     ax.set_ylabel("km N", color="#7a8699")
-    ax.set_title(f"{cfg.name} — satellite fire tracking (GOES-18)", color="white", fontsize=14, pad=10)
+    ax.set_title(f"{cfg.name}, satellite fire tracking (GOES-18)", color="white", fontsize=14, pad=10)
     ax.tick_params(colors="#4a5568")
     for s in ax.spines.values():
         s.set_color("#1b2436")
@@ -203,7 +203,7 @@ def _captions(cfg, track, delta):
     return [
         (0, 45, "GOES-18 catches the first thermal signature from orbit"),
         (45, 100, "Thermal pixels cluster into a single tracked fire object"),
-        (100, a, f"Locked on — the front pushes {heading} across the terrain"),
+        (100, a, f"Locked on, the front pushes {heading} across the terrain"),
         (a, a + 22, f"Forecast issued · assimilating {a // 60} h of satellite detections"),
         (a + 22, w - 45, "Physics + data-assimilation project the spread ahead"),
         (w - 45, w + 1, f"Tracked burn extent surpasses {peak:.0f} km²"),
@@ -211,7 +211,7 @@ def _captions(cfg, track, delta):
         if delta is not None else f"{cfg.name}: tracked to {peak:.0f} km²")
 
 
-def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 6, px: int = 640) -> str:
+def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 4, px: int = 600) -> str:
     """Cinematic sped-up time-lapse with narrated subtitles (mp4, loopable scope)."""
     import matplotlib
     matplotlib.use("Agg")
@@ -296,15 +296,21 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 6, 
 
         # minimal persistent HUD
         area = next((p.area_km2 for p in reversed(track.points) if p.t_min <= t), 0.0)
-        phase = "FORECAST" if t >= cfg.assim_min else "TRACKING"
         ax.text(0.035, 0.955, cfg.name.upper(), transform=ax.transAxes, color="white", fontproperties=subf_sm,
                 va="top", path_effects=shadow)
         ax.text(0.035, 0.915, f"T+{t:04.0f} MIN", transform=ax.transAxes, color=NEON, fontproperties=subf_sm,
                 va="top", path_effects=shadow)
-        ax.text(0.965, 0.955, f"{area:.0f} KM²", transform=ax.transAxes, color="#ffcf6b", fontproperties=subf_sm,
+        ax.text(0.965, 0.955, f"{area:.0f} km²", transform=ax.transAxes, color="#ffcf6b", fontproperties=subf_sm,
                 ha="right", va="top", path_effects=shadow)
-        ax.text(0.965, 0.915, phase, transform=ax.transAxes, color=(FLAME if phase == "FORECAST" else NEON),
-                fontproperties=subf_sm, ha="right", va="top", path_effects=shadow)
+        # legend: what is the FIRE vs what is the MODEL (persistent, top-left under the clock)
+        if title_a < 0.5:
+            ax.text(0.035, 0.875, "● FIRE (observed)", transform=ax.transAxes, color="#ffcf6b",
+                    fontproperties=subf_sm, va="top", path_effects=shadow)
+            ax.text(0.035, 0.842, "● MODEL (track)", transform=ax.transAxes, color=NEON,
+                    fontproperties=subf_sm, va="top", path_effects=shadow)
+            if t >= cfg.assim_min:
+                ax.text(0.035, 0.809, "▂ MODEL (forecast)", transform=ax.transAxes, color=FLAME,
+                        fontproperties=subf_sm, va="top", path_effects=shadow)
         ax.plot([0.035, 0.035 + 0.93 * t / cfg.window_min], [0.052, 0.052], transform=ax.transAxes,
                 color=NEON, lw=2.6, alpha=0.9, solid_capstyle="round")
 
@@ -341,9 +347,14 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 6, 
         frames.append(render(0, title_a=1.0))
     for k in range(4):
         frames.append(render(0, title_a=max(0.0, 1 - k / 3.0)))  # title fades out
-    for t in np.linspace(0, cfg.window_min, 64):  # narrated timeline (smooth, slow)
+    # narrated timeline, slow: hold a few frames at each stage boundary so each step is legible
+    holds = {0: 6, 60: 5, 120: 5, cfg.assim_min: 8}
+    for t in np.linspace(0, cfg.window_min, 150):
         frames.append(render(t))
-    for _ in range(fps + 10):  # hold with the summary line
+        for bnd, n in holds.items():
+            if abs(t - bnd) < (cfg.window_min / 150):
+                frames += [frames[-1]] * n
+    for _ in range(fps + 16):  # hold with the summary line
         frames.append(render(cfg.window_min, sub_override=(summary, 1.0)))
 
     out = EventPaths(f"retro_{cfg.key}").ensure().outputs / "figures" / "tracking.mp4"
@@ -358,10 +369,10 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 6, 
     return str(out)
 
 
-def response_video(bundle, on, cfg, fps: int = 6, px: int = 640, threshold: float = 0.25,
+def response_video(bundle, on, cfg, fps: int = 4, px: int = 600, threshold: float = 0.25,
                    threat_km: float = 4.0) -> tuple[str, list]:
     """Decision-response time-lapse: the forecast spreads, communities light up as they're flagged for
-    evacuation, egress routes at risk turn red — with the lead-time / confidence VALUES narrated."""
+    evacuation, egress routes at risk turn red, with the lead-time / confidence VALUES narrated."""
     import matplotlib
     matplotlib.use("Agg")
     import imageio.v2 as imageio
@@ -378,7 +389,7 @@ def response_video(bundle, on, cfg, fps: int = 6, px: int = 640, threshold: floa
     ix, iy = np.array(proj.to_local(*bundle.ignition_lonlat)) / 1000
 
     # Operational forecast: project FORWARD from the fire's observed extent at issue time (the GOES
-    # footprint) — the way an incident forecast starts from the current perimeter. Clock t=0 = issue.
+    # footprint), the way an incident forecast starts from the current perimeter. Clock t=0 = issue.
     from firewatch.forecast.engine import run_forecast
     from firewatch.forecast.ensemble import EnsembleConfig
     span = cfg.window_min - cfg.assim_min
@@ -418,7 +429,7 @@ def response_video(bundle, on, cfg, fps: int = 6, px: int = 640, threshold: floa
     dpi = 100
     fig = plt.figure(figsize=(px / dpi, px / dpi), dpi=dpi, facecolor="#05070d")
     ax = fig.add_axes([0, 0, 1, 1])
-    horizons = np.linspace(0, span, 50)
+    horizons = np.linspace(0, span, 120)
     step = span / 33
 
     def render(h, sub_override=None):
@@ -474,6 +485,11 @@ def response_video(bundle, on, cfg, fps: int = 6, px: int = 640, threshold: floa
         pr_lbl = f"{pop_risk / 1000:.1f}K" if pop_risk >= 1000 else f"{pop_risk}"
         ax.text(0.965, 0.915, f"~{pr_lbl} RESIDENTS AT RISK", transform=ax.transAxes,
                 color="#ffb03a", fontproperties=subf_sm, ha="right", va="top", path_effects=shadow)
+        # legend: what is the MODEL forecast vs the community markers
+        ax.text(0.035, 0.875, "▦ MODEL burn probability", transform=ax.transAxes, color="#ff8a5c",
+                fontproperties=subf_sm, va="top", path_effects=shadow)
+        ax.text(0.035, 0.842, "● community · green safe / red flagged", transform=ax.transAxes,
+                color="#7bd88f", fontproperties=subf_sm, va="top", path_effects=shadow)
         act = ("ESTIMATING exposure · population within threat radius" if n_flag
                else "PROJECTING burn probability · ensemble forecast")
         # dynamic subtitle carrying the response VALUE
@@ -486,7 +502,7 @@ def response_video(bundle, on, cfg, fps: int = 6, px: int = 640, threshold: floa
                 lead_lbl = "threat imminent" if z["lead"] < 1 else f"~{z['lead']:.0f} min lead"
                 txt = f"⚠ {z['name']}: recommend evacuation · {lead_lbl} · {z['conf']:.0%} confidence"
             elif h < 25:
-                txt = "Forecast issued — projecting spread and population exposure"
+                txt = "Forecast issued, projecting spread and population exposure"
             else:
                 txt = f"{n_flag} {'community' if n_flag == 1 else 'communities'} flagged for evacuation · projecting ahead"
         ax.add_patch(mpatches.Rectangle((0, 0), 1, 0.235, transform=ax.transAxes, zorder=8, color="#05070d", alpha=0.30))
@@ -503,7 +519,7 @@ def response_video(bundle, on, cfg, fps: int = 6, px: int = 640, threshold: floa
     pop_lbl = f"~{total_pop / 1000:.0f}K residents" if total_pop >= 1000 else f"~{total_pop} residents"
     summary = (f"{nf} {'community' if nf == 1 else 'communities'} flagged · {pop_lbl} at risk"
                if flagged else "No communities crossed the evacuation threshold in-window")
-    frames += [render(span, sub_override=summary)] * (fps + 10)
+    frames += [render(span, sub_override=summary)] * (fps + 16)
 
     out = EventPaths(f"retro_{cfg.key}").ensure().outputs / "figures" / "response.mp4"
     imageio.mimwrite(out, frames, fps=fps, codec="libx264", quality=9, macro_block_size=16,
@@ -518,7 +534,7 @@ def response_video(bundle, on, cfg, fps: int = 6, px: int = 640, threshold: floa
 
 
 def evolution_frames(bundle, track, on, cfg, responses, n=6, px=560) -> list:
-    """Render N labeled snapshots across the fire's real evolution — what the model shows/suggests at
+    """Render N labeled snapshots across the fire's real evolution, what the model shows/suggests at
     each time. Returns [{asset, t_min, phase, area_km2, caption}]. Saved to docs/assets/evo_<key>_i.png."""
     import matplotlib
     matplotlib.use("Agg")
@@ -602,9 +618,9 @@ def evolution_frames(bundle, track, on, cfg, responses, n=6, px=560) -> list:
             phase = "Forecast"
             if n_flag:
                 popl = f"~{pop / 1000:.0f}K residents" if pop >= 1000 else f"~{pop} residents"
-                caption = f"Forecast — {n_flag} communit{'y' if n_flag == 1 else 'ies'} flagged · {popl} at risk"
+                caption = f"Forecast, {n_flag} communit{'y' if n_flag == 1 else 'ies'} flagged · {popl} at risk"
             else:
-                caption = "Forecast issued — projecting spread & exposure"
+                caption = "Forecast issued, projecting spread & exposure"
         ax.text(0.035, 0.955, f"T+{t:.0f} MIN", transform=ax.transAxes, color=NEON, fontproperties=subf_sm,
                 va="top", path_effects=shadow)
         ax.text(0.965, 0.955, f"{area:.0f} KM²", transform=ax.transAxes, color="#ffcf6b", fontproperties=subf_sm,
@@ -700,7 +716,7 @@ def run_historical(key: str, members: int = 28) -> dict:
              "dice_on": round(so[h]["dice"], 3), "brier_on": round(so[h]["brier"], 4),
              "coverage90": round(so[h]["coverage_90"], 2)}
             for h in cfg.horizons],
-        # real observation provenance (the Data tab) — each GOES active-fire timestep
+        # real observation provenance (the Data tab), each GOES active-fire timestep
         "observations": _observation_rows(bundle),
         "center": [round(cfg.center_lat, 4), round(cfg.center_lon, 4)],
         "assim_min": cfg.assim_min, "window_min": cfg.window_min,

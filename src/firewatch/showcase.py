@@ -46,13 +46,13 @@ PIPELINE = [
      "Terrain Tiles, ESA WorldCover, NIFC perimeters, OpenStreetMap) and resolved into a single "
      "time-versioned ontology of `Observation` objects, each carrying mandatory provenance "
      "(source, product, retrieval time, native resolution). Modules exchange ontology objects, "
-     "never raw payloads — the decoupling that makes the system auditable and reconstructable at "
+     "never raw payloads, the decoupling that makes the system auditable and reconstructable at "
      "any past instant."),
     ("perception", "Perception", "Detect + segment smoke/flame on imagery",
      "Camera frames pass through an off-the-shelf detector (YOLO / RT-DETR) and a promptable video "
      "segmenter (SAM 2), with a learned U-Net trained on real Pyronear wildfire imagery on the ML "
      "path and a transparent classical-CV fallback when weights are absent. Per-frame smoke-state "
-     "features — mask area, centroid, bearing, growth rate, plume tilt (a wind proxy) — are emitted. "
+     "features, mask area, centroid, bearing, growth rate, plume tilt (a wind proxy), are emitted. "
      "Detection is a commodity input, not the contribution; the value is what happens downstream."),
     ("georeference", "Georeference", "Camera plume → lat/lon front + uncertainty",
      "Given a camera pose and a smoke mask, rays are cast through mask pixels and intersected with a "
@@ -62,7 +62,7 @@ PIPELINE = [
      "tighter fix. The georeferenced front is emitted as an assimilable observation."),
     ("tracking", "Tracking", "Cluster detections → track the fire object",
      "At each timestep the active-fire pixels are clustered into fire objects (DBSCAN over a local "
-     "metric projection) and associated across time by nearest-centroid data association — the core "
+     "metric projection) and associated across time by nearest-centroid data association, the core "
      "of multi-object tracking. From the track we derive the centroid path, growth curve, "
      "rate-of-spread and heading, giving a continuous, quantitative estimate of the fire's state "
      "from discrete satellite observations."),
@@ -78,18 +78,18 @@ PIPELINE = [
      "its predicted burned area matches the observation under a provenance-weighted, front-distance "
      "likelihood; members are reweighted and resampled with parameter jitter when the effective "
      "sample size collapses. A particle filter (vs. an EnKF) avoids the classic spurious-fire "
-     "failure mode. This assimilation is the research core — it measurably sharpens the forecast."),
+     "failure mode. This assimilation is the research core, it measurably sharpens the forecast."),
     ("calibration", "Calibration", "Make the probabilities mean what they say",
      "The burn-probability field is treated as a first-class calibrated product. Reliability "
      "diagrams, Brier score, CRPS and empirical coverage are computed against the observed "
      "progression; temperature scaling / isotonic recalibration are applied and reported pre/post. "
      "A cell assigned 30% should burn ~30% of the time, and the stated 90% region should contain "
-     "the truth ~90% of the time — calibration is a deliverable, not an afterthought."),
+     "the truth ~90% of the time, calibration is a deliverable, not an afterthought."),
     ("decision", "Decision", "Exposure & human-in-the-loop analysis",
      "The calibrated forecast is overlaid on population and assets (OpenStreetMap places, building "
      "footprints, road graph) to compute expected exposure, time-to-threat, and egress risk with "
      "confidence bands. Every output is traceable to the observations and forecast that produced it. "
-     "The system informs a human decision — it never issues an autonomous order."),
+     "The system informs a human decision, it never issues an autonomous order."),
 ]
 
 
@@ -145,14 +145,14 @@ def pipeline_figures():
         return p.name
 
     out = {}
-    # ingest — detections over terrain, colored by time
+    # ingest, detections over terrain, colored by time
     fig, ax = plt.subplots(figsize=(5, 5), facecolor=BG); base(ax)
     dl = np.array([proj.to_local(x, y) for x, y in det[:, 1:3]]) / 1000
     ax.scatter(dl[:, 0], dl[:, 1], c=det[:, 0], cmap="inferno", s=28, edgecolor="#ffdca8", linewidths=0.3)
     ax.set_title("GOES-18 active-fire detections", color=TXT, fontsize=10, loc="left")
     out["ingest"] = save(fig, "ingest")
 
-    # perception — real Pyronear image + U-Net mask
+    # perception, real Pyronear image + U-Net mask
     try:
         from firewatch.perception.smoke_net import load_if_available, load_pyro_sdis
         seg = load_if_available()
@@ -169,7 +169,7 @@ def pipeline_figures():
     except Exception as e:
         log.warning("perception stage figure skipped: %s", e)
 
-    # georeference — schematic ray-cast over terrain profile
+    # georeference, schematic ray-cast over terrain profile
     fig, ax = plt.subplots(figsize=(5, 3.6), facecolor=BG); ax.set_facecolor(PANEL)
     xs = np.linspace(0, 10, 200)
     terr = 1.2 + 0.5 * np.sin(xs / 1.5) + 0.15 * xs
@@ -186,7 +186,7 @@ def pipeline_figures():
     ax.set_title("DEM ray-cast · camera → ground coordinates", color=TXT, fontsize=10, loc="left")
     out["georeference"] = save(fig, "georeference")
 
-    # tracking — clusters + centroid path
+    # tracking, clusters + centroid path
     fig, ax = plt.subplots(figsize=(5, 5), facecolor=BG); base(ax)
     last = det[det[:, 0] <= det[:, 0].max()]
     clusters = _cluster([(x, y) for x, y in last[:, 1:3]])
@@ -200,7 +200,7 @@ def pipeline_figures():
     ax.set_title("DBSCAN clusters + tracked centroid path", color=TXT, fontsize=10, loc="left")
     out["tracking"] = save(fig, "tracking")
 
-    # forecast — burn probability field
+    # forecast, burn probability field
     issue_mask = burned_mask(b.truth_arrival, cfg.assim_min)
     fc = run_forecast(grid, b.ignition_lonlat, b.ignition_time, assimilate=False, issued_at=b.ignition_time,
                       horizons=[cfg.window_min - cfg.assim_min], initial_mask=issue_mask,
@@ -211,7 +211,7 @@ def pipeline_figures():
     ax.set_title("Ensemble burn-probability field", color=TXT, fontsize=10, loc="left")
     out["forecast"] = save(fig, "forecast")
 
-    # assimilation — ON vs OFF vs truth
+    # assimilation, ON vs OFF vs truth
     ecfg = EnsembleConfig(n_members=36, wind_dir_sd_deg=45, wind_mult_sd=0.4)
     from datetime import timedelta
     iss = b.ignition_time + timedelta(minutes=cfg.assim_min)
@@ -237,7 +237,7 @@ def pipeline_figures():
     ax.set_title("Assimilation ON vs OFF vs observed", color=TXT, fontsize=10, loc="left")
     out["assimilation"] = save(fig, "assimilation")
 
-    # calibration — reliability diagram
+    # calibration, reliability diagram
     from firewatch.forecast.calibrate import (
         brier_score,
         fit_temperature,
@@ -257,7 +257,7 @@ def pipeline_figures():
     ax.legend(fontsize=7, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT)
     out["calibration"] = save(fig, "calibration")
 
-    # decision — reuse the response poster if present
+    # decision, reuse the response poster if present
     rp = ASSETS / "response_poster_park.png"
     out["decision"] = rp.name if rp.exists() else None
     return out
@@ -292,7 +292,7 @@ def results_figures(events):
     ax.legend(fontsize=8, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT)
     out["growth"] = save(fig, "growth")
 
-    # model performance — grouped bars per horizon (mean across fires)
+    # model performance, grouped bars per horizon (mean across fires)
     hs = [s["horizon_min"] for s in events[0].get("skill_by_horizon", [])]
     if hs:
         base = np.array([np.mean([[s for s in e["skill_by_horizon"] if s["horizon_min"] == h][0]["iou_off"]
@@ -321,6 +321,27 @@ def results_figures(events):
     ax.set_ylabel("cumulative pixels", color=MUT, fontsize=8)
     ax.legend(fontsize=8, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT)
     out["detections"] = save(fig, "detections")
+
+    # spread rate per fire (bar)
+    fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG); _style(ax, "Mean spread rate by fire")
+    names = [e["name"].split(" (")[0] for e in events]
+    ax.bar(names, [e["mean_ros_kmh"] for e in events], color=[cols.get(e["key"], TXT) for e in events], width=0.55)
+    ax.set_ylabel("km/h", color=MUT, fontsize=8)
+    out["spread"] = save(fig, "spread")
+
+    # 90% coverage vs horizon (line per fire) — calibration of the forecast envelope
+    if hs:
+        fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG); _style(ax, "Forecast 90% region coverage by horizon")
+        for e in events:
+            sk = e.get("skill_by_horizon", [])
+            if sk:
+                ax.plot([s["horizon_min"] for s in sk], [s.get("coverage90", 0) for s in sk], "-o", ms=3, lw=1.8,
+                        color=cols.get(e["key"], TXT), label=e["name"].split(" (")[0])
+        ax.axhline(0.9, color=MUT, ls="--", lw=1)
+        ax.set_xlabel("horizon (min)", color=MUT, fontsize=8)
+        ax.set_ylabel("fraction of truth inside 90% region", color=MUT, fontsize=8)
+        ax.legend(fontsize=8, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT)
+        out["coverage"] = save(fig, "coverage")
     return out
 
 
