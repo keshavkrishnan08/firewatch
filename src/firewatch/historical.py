@@ -28,6 +28,18 @@ log = logging.getLogger("firewatch.historical")
 
 NEON = "#4ff0d0"
 FLAME = "#ff6a2b"
+BLUE = "#4c9aff"  # what the model is doing (distinct from fire orange / track cyan)
+
+
+def _model_action_track(t, cfg):
+    """One line naming the pipeline stage the model is executing at time t (tracking video)."""
+    if t < 60:
+        return "DETECTING active-fire pixels · GOES-18 ABI L2-FDC"
+    if t < 120:
+        return "CLUSTERING detections into a fire object · DBSCAN"
+    if t < cfg.assim_min:
+        return "TRACKING the front · nearest-centroid data association"
+    return "FORECASTING spread · Rothermel + minimum-travel-time ensemble"
 
 
 def _hillshade(elev: np.ndarray, cell_m: float, az=315.0, alt=45.0) -> np.ndarray:
@@ -199,7 +211,7 @@ def _captions(cfg, track, delta):
         if delta is not None else f"{cfg.name}: tracked to {peak:.0f} km²")
 
 
-def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 11, px: int = 640) -> str:
+def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 6, px: int = 640) -> str:
     """Cinematic sped-up time-lapse with narrated subtitles (mp4, loopable scope)."""
     import matplotlib
     matplotlib.use("Agg")
@@ -296,13 +308,17 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 11,
         ax.plot([0.035, 0.035 + 0.93 * t / cfg.window_min], [0.052, 0.052], transform=ax.transAxes,
                 color=NEON, lw=2.6, alpha=0.9, solid_capstyle="round")
 
-        # Netflix-style narrated subtitle (bottom-center, white with soft dark stroke)
+        # bottom caption band: blue = what the MODEL is doing, white = plain narration
         sub = sub_override if sub_override is not None else caption_for(t)
         txt, a = (sub if isinstance(sub, tuple) else (sub, 1.0))
+        if (txt and a > 0.02) or title_a < 0.5:
+            ax.add_patch(mpatches.Rectangle((0, 0), 1, 0.235, transform=ax.transAxes, zorder=8,
+                                            color="#05070d", alpha=0.30 * max(a, 0.6)))
+        if title_a < 0.5:
+            ax.text(0.5, 0.17, "▸ MODEL · " + _model_action_track(t, cfg), transform=ax.transAxes,
+                    ha="center", va="center", color=BLUE, fontproperties=subf_sm, zorder=9, path_effects=shadow)
         if txt and a > 0.02:
-            ax.add_patch(mpatches.Rectangle((0, 0), 1, 0.19, transform=ax.transAxes, zorder=8,
-                                            color="#05070d", alpha=0.22 * a))
-            ax.text(0.5, 0.105, txt, transform=ax.transAxes, ha="center", va="center", color="white",
+            ax.text(0.5, 0.085, txt, transform=ax.transAxes, ha="center", va="center", color="white",
                     fontproperties=subf, alpha=a, zorder=9, path_effects=shadow, wrap=True)
 
         if title_a > 0.02:  # opening title card
@@ -325,9 +341,9 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 11,
         frames.append(render(0, title_a=1.0))
     for k in range(4):
         frames.append(render(0, title_a=max(0.0, 1 - k / 3.0)))  # title fades out
-    for t in np.linspace(0, cfg.window_min, 42):  # narrated timeline
+    for t in np.linspace(0, cfg.window_min, 64):  # narrated timeline (smooth, slow)
         frames.append(render(t))
-    for _ in range(fps + 6):  # hold with the summary line
+    for _ in range(fps + 10):  # hold with the summary line
         frames.append(render(cfg.window_min, sub_override=(summary, 1.0)))
 
     out = EventPaths(f"retro_{cfg.key}").ensure().outputs / "figures" / "tracking.mp4"
@@ -342,7 +358,7 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 11,
     return str(out)
 
 
-def response_video(bundle, on, cfg, fps: int = 11, px: int = 640, threshold: float = 0.25,
+def response_video(bundle, on, cfg, fps: int = 6, px: int = 640, threshold: float = 0.25,
                    threat_km: float = 4.0) -> tuple[str, list]:
     """Decision-response time-lapse: the forecast spreads, communities light up as they're flagged for
     evacuation, egress routes at risk turn red — with the lead-time / confidence VALUES narrated."""
@@ -402,7 +418,7 @@ def response_video(bundle, on, cfg, fps: int = 11, px: int = 640, threshold: flo
     dpi = 100
     fig = plt.figure(figsize=(px / dpi, px / dpi), dpi=dpi, facecolor="#05070d")
     ax = fig.add_axes([0, 0, 1, 1])
-    horizons = np.linspace(0, span, 34)
+    horizons = np.linspace(0, span, 50)
     step = span / 33
 
     def render(h, sub_override=None):
@@ -458,6 +474,8 @@ def response_video(bundle, on, cfg, fps: int = 11, px: int = 640, threshold: flo
         pr_lbl = f"{pop_risk / 1000:.1f}K" if pop_risk >= 1000 else f"{pop_risk}"
         ax.text(0.965, 0.915, f"~{pr_lbl} RESIDENTS AT RISK", transform=ax.transAxes,
                 color="#ffb03a", fontproperties=subf_sm, ha="right", va="top", path_effects=shadow)
+        act = ("ESTIMATING exposure · population within threat radius" if n_flag
+               else "PROJECTING burn probability · ensemble forecast")
         # dynamic subtitle carrying the response VALUE
         if sub_override is not None:
             txt = sub_override
@@ -471,8 +489,10 @@ def response_video(bundle, on, cfg, fps: int = 11, px: int = 640, threshold: flo
                 txt = "Forecast issued — projecting spread and population exposure"
             else:
                 txt = f"{n_flag} {'community' if n_flag == 1 else 'communities'} flagged for evacuation · projecting ahead"
-        ax.add_patch(mpatches.Rectangle((0, 0), 1, 0.19, transform=ax.transAxes, zorder=8, color="#05070d", alpha=0.24))
-        ax.text(0.5, 0.105, txt, transform=ax.transAxes, ha="center", va="center", color="white",
+        ax.add_patch(mpatches.Rectangle((0, 0), 1, 0.235, transform=ax.transAxes, zorder=8, color="#05070d", alpha=0.30))
+        ax.text(0.5, 0.17, "▸ MODEL · " + act, transform=ax.transAxes, ha="center", va="center", color=BLUE,
+                fontproperties=subf_sm, zorder=9, path_effects=shadow)
+        ax.text(0.5, 0.085, txt, transform=ax.transAxes, ha="center", va="center", color="white",
                 fontproperties=subf, zorder=9, path_effects=shadow)
         fig.canvas.draw()
         return np.asarray(fig.canvas.buffer_rgba())[..., :3].copy()
@@ -483,7 +503,7 @@ def response_video(bundle, on, cfg, fps: int = 11, px: int = 640, threshold: flo
     pop_lbl = f"~{total_pop / 1000:.0f}K residents" if total_pop >= 1000 else f"~{total_pop} residents"
     summary = (f"{nf} {'community' if nf == 1 else 'communities'} flagged · {pop_lbl} at risk"
                if flagged else "No communities crossed the evacuation threshold in-window")
-    frames += [render(span, sub_override=summary)] * (fps + 6)
+    frames += [render(span, sub_override=summary)] * (fps + 10)
 
     out = EventPaths(f"retro_{cfg.key}").ensure().outputs / "figures" / "response.mp4"
     imageio.mimwrite(out, frames, fps=fps, codec="libx264", quality=9, macro_block_size=16,

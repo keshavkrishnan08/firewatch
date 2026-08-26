@@ -79,3 +79,10 @@ history:
 
 clean:
 	rm -rf outputs/* data/events/$(FIRE)/cache 2>/dev/null || true
+
+# Full showcase: fire tracking/response videos + pipeline figures + results graphs + demo,
+# then the multi-tab FIREWATCH site (docs/history.html).
+showcase:
+	$(PYTHON) -c "from firewatch.historical import run_all; run_all()"
+	$(PYTHON) -m firewatch.showcase
+	$(PYTHON) scripts/build_history_page.py docs/history.html
