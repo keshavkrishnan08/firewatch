@@ -119,7 +119,13 @@ The synthetic numbers show the method's ceiling; this shows its **honest real-wo
 Terrain Tiles, fuels from ESA WorldCover, and HRRR wind — pre-registered
 ([`docs/EVALUATION_PREREG.md`](docs/EVALUATION_PREREG.md)) before scoring:
 
-| Assimilation ablation (real GOES truth) | COP vs observed fire (dashed = GOES truth) |
+The same COP board, on the real historical fire — GOES hotspots, the assimilated forecast, real
+Park-Fire-area roads (Richardson Springs Rd, Cohasset Rd) flagged as egress, and the honest
+`+0.02 ΔIoU vs baseline` header stat:
+
+![FIREWATCH COP board — Park Fire retrospective](docs/assets/cop_board_retro.png)
+
+| Assimilation ablation (real GOES truth) | Forecast vs observed fire (dashed = GOES truth) |
 |---|---|
 | ![retro ablation](docs/assets/retro_ablation.png) | ![retro map](docs/assets/retro_cop_map.png) |
 
