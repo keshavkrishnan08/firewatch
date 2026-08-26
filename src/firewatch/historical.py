@@ -160,13 +160,55 @@ def tracking_figure(bundle, track: FireTrack, on, ablation_delta: float | None, 
     return str(out)
 
 
-def tracking_video(bundle, track: FireTrack, on, cfg, fps: int = 8, px: int = 640) -> str:
-    """Sped-up time-lapse of the fire tracking growing over time (mp4, loopable scope)."""
+def _subtitle_font(size=15, weight="medium"):
+    import os
+
+    from matplotlib import font_manager as fm
+
+    for p in ("/System/Library/Fonts/Avenir Next.ttc", "/System/Library/Fonts/HelveticaNeue.ttc",
+              "/System/Library/Fonts/Helvetica.ttc", "/System/Library/Fonts/Supplemental/Arial.ttf"):
+        if os.path.exists(p):
+            try:
+                return fm.FontProperties(fname=p, size=size, weight=weight)
+            except Exception:
+                pass
+    return fm.FontProperties(family="sans-serif", size=size, weight=weight)
+
+
+def _compass(deg):
+    return ["north", "north-north-east", "north-east", "east-north-east", "east", "east-south-east",
+            "south-east", "south-south-east", "south", "south-south-west", "south-west",
+            "west-south-west", "west", "west-north-west", "north-west", "north-north-west"][
+        int(((deg % 360) + 11.25) // 22.5) % 16]
+
+
+def _captions(cfg, track, delta):
+    """Timed narrative captions (seconds→text) driven by the real tracked stats."""
+    a, w = cfg.assim_min, cfg.window_min
+    heading = _compass(track.net_heading_deg())
+    peak = track.peak_area_km2
+    return [
+        (0, 45, "GOES-18 catches the first thermal signature from orbit"),
+        (45, 100, "Thermal pixels cluster into a single tracked fire object"),
+        (100, a, f"Locked on — the front pushes {heading} across the terrain"),
+        (a, a + 22, f"Forecast issued · assimilating {a // 60} h of satellite detections"),
+        (a + 22, w - 45, "Physics + data-assimilation project the spread ahead"),
+        (w - 45, w + 1, f"Tracked burn extent surpasses {peak:.0f} km²"),
+    ], (f"{cfg.name}: assimilation beat the no-forecast baseline (+{delta:.3f} IoU)"
+        if delta is not None else f"{cfg.name}: tracked to {peak:.0f} km²")
+
+
+def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 11, px: int = 640) -> str:
+    """Cinematic sped-up time-lapse with narrated subtitles (mp4, loopable scope)."""
     import matplotlib
     matplotlib.use("Agg")
     import imageio.v2 as imageio
+    import matplotlib.patches as mpatches
+    import matplotlib.patheffects as pe
     import matplotlib.pyplot as plt
     from matplotlib.colors import Normalize
+
+    from firewatch.geo import from_geojson
 
     grid = bundle.grid
     proj = grid.projector
@@ -174,8 +216,7 @@ def tracking_video(bundle, track: FireTrack, on, cfg, fps: int = 8, px: int = 64
     hs = _hillshade(grid.elevation, grid.cell_m)
     goes = sorted([o for o in bundle.observations if o.kind.value == "goes" and o.geometry], key=lambda o: o.t)
     t0 = goes[0].t if goes else bundle.ignition_time
-    from firewatch.geo import from_geojson
-    det = []  # (t_min, lon, lat)
+    det = []
     for o in goes:
         g = from_geojson(o.geometry)
         for p in (g.geoms if g.geom_type == "MultiPoint" else [g]):
@@ -185,44 +226,50 @@ def tracking_video(bundle, track: FireTrack, on, cfg, fps: int = 8, px: int = 64
     ptimes = np.array([p.t_min for p in track.points])
     ix, iy = np.array(proj.to_local(*bundle.ignition_lonlat)) / 1000
     fp = on.expected_perimeter.get(cfg.horizons[-1])
+    grid_norm = Normalize(0, cfg.window_min)
+    subf, subf_sm, titlef = _subtitle_font(16), _subtitle_font(11, "regular"), _subtitle_font(27, "bold")
+    caps, summary = _captions(cfg, track, delta)
+    shadow = [pe.withStroke(linewidth=3.0, foreground=(0, 0, 0, 0.75))]
 
     dpi = 100
-    size = px / dpi
-    fig = plt.figure(figsize=(size, size), dpi=dpi, facecolor="#05070d")
+    fig = plt.figure(figsize=(px / dpi, px / dpi), dpi=dpi, facecolor="#05070d")
     ax = fig.add_axes([0, 0, 1, 1])
-    frames = []
-    grid_norm = Normalize(0, cfg.window_min)
-    times = np.linspace(0, cfg.window_min, 26)
-    for t in times:
+
+    def caption_for(t):
+        for a0, a1, txt in caps:
+            if a0 <= t < a1:
+                edge = min(t - a0, a1 - t)
+                return txt, min(1.0, edge / 12.0)  # brief fade at segment edges
+        return None, 0.0
+
+    def render(t, title_a=0.0, black=0.0, sub_override=None):
         ax.clear()
         ax.set_facecolor("#05070d")
-        ax.imshow(hs, origin="lower", cmap="gray", extent=ext, alpha=0.5, vmin=-0.2, vmax=1.2)
-        ax.imshow(np.where(grid.fuel == 0, 1.0, np.nan), origin="lower", extent=ext, cmap="Blues", alpha=0.18)
-        # accumulated fire footprint up to t
+        ax.imshow(hs, origin="lower", cmap="gray", extent=ext, alpha=0.5, vmin=-0.2, vmax=1.2, zorder=0)
+        ax.imshow(np.where(grid.fuel == 0, 1.0, np.nan), origin="lower", extent=ext, cmap="Blues", alpha=0.18, zorder=1)
         poly = grid.mask_to_polygon(burned_mask(bundle.truth_arrival, t))
         if poly is not None:
             for pg in (poly.geoms if poly.geom_type == "MultiPolygon" else [poly]):
                 if pg.is_empty or not hasattr(pg, "exterior"):
                     continue
                 xs, ys = proj.to_local(*np.asarray(pg.exterior.coords).T)
-                ax.fill(xs / 1000, ys / 1000, color=FLAME, alpha=0.16, zorder=2)
-                ax.plot(xs / 1000, ys / 1000, color="#ffcf6b", lw=1.6, alpha=0.95, zorder=3)
-        # detections up to t (recent brighter)
+                ax.fill(xs / 1000, ys / 1000, color=FLAME, alpha=0.18, zorder=2)
+                ax.plot(xs / 1000, ys / 1000, color=FLAME, lw=6, alpha=0.12, zorder=2)  # glow
+                ax.plot(xs / 1000, ys / 1000, color="#ffcf6b", lw=1.7, alpha=0.96, zorder=3)
         if len(det):
             m = det[:, 0] <= t + 1e-6
             if m.any():
                 dl = np.array([proj.to_local(x, y) for x, y in det[m, 1:3]]) / 1000
                 age = np.clip((t - det[m, 0]) / 90.0, 0, 1)
-                ax.scatter(dl[:, 0], dl[:, 1], s=26 * (1 - age) + 6, c=det[m, 0], cmap="inferno",
+                ax.scatter(dl[:, 0], dl[:, 1], s=30 * (1 - age) + 6, c=det[m, 0], cmap="inferno",
                            norm=grid_norm, edgecolor="#ffdca8", linewidths=0.3, alpha=0.9, zorder=4)
-        # tracked centroid path up to t
         pm = ptimes <= t + 1e-6
         if pm.sum() >= 2:
             pp = path[pm]
-            for w, a in ((6, 0.13), (3, 0.95)):
-                ax.plot(pp[:, 0], pp[:, 1], color=NEON, lw=w, alpha=a, solid_capstyle="round", zorder=5)
-            ax.scatter(pp[-1, 0], pp[-1, 1], s=70, color=NEON, edgecolor="white", linewidths=0.6, zorder=6)
-        # forecast after issue
+            for lw, a in ((6, 0.14), (3, 0.95)):
+                ax.plot(pp[:, 0], pp[:, 1], color=NEON, lw=lw, alpha=a, solid_capstyle="round", zorder=5)
+            pulse = 60 + 34 * (0.5 + 0.5 * np.sin(t / 12.0))
+            ax.scatter(pp[-1, 0], pp[-1, 1], s=pulse, color=NEON, edgecolor="white", linewidths=0.6, zorder=6)
         if t >= cfg.assim_min and fp is not None:
             for pg in (fp.geoms if fp.geom_type == "MultiPolygon" else [fp]):
                 if pg.is_empty or not hasattr(pg, "exterior"):
@@ -233,29 +280,64 @@ def tracking_video(bundle, track: FireTrack, on, cfg, fps: int = 8, px: int = 64
         ax.set_xlim(ext[0], ext[1])
         ax.set_ylim(ext[2], ext[3])
         ax.axis("off")
-        # HUD
+
+        # minimal persistent HUD
         area = next((p.area_km2 for p in reversed(track.points) if p.t_min <= t), 0.0)
-        phase = "FORECAST" if t >= cfg.assim_min else "ASSIMILATING"
-        ax.text(0.03, 0.955, cfg.name.upper(), transform=ax.transAxes, color="white",
-                family="monospace", fontsize=11, fontweight="bold", va="top")
-        ax.text(0.03, 0.905, f"T+{t:04.0f} min", transform=ax.transAxes, color=NEON,
-                family="monospace", fontsize=10, va="top")
-        ax.text(0.97, 0.955, f"{area:5.0f} km²", transform=ax.transAxes, color="#ffcf6b",
-                family="monospace", fontsize=10, ha="right", va="top")
-        ax.text(0.97, 0.905, phase, transform=ax.transAxes, color=(FLAME if phase == "FORECAST" else NEON),
-                family="monospace", fontsize=9, ha="right", va="top")
-        ax.plot([0.03, 0.03 + 0.94 * t / cfg.window_min], [0.035, 0.035], transform=ax.transAxes,
-                color=NEON, lw=2.4, solid_capstyle="round")
+        phase = "FORECAST" if t >= cfg.assim_min else "TRACKING"
+        ax.text(0.035, 0.955, cfg.name.upper(), transform=ax.transAxes, color="white", fontproperties=subf_sm,
+                va="top", path_effects=shadow)
+        ax.text(0.035, 0.915, f"T+{t:04.0f} MIN", transform=ax.transAxes, color=NEON, fontproperties=subf_sm,
+                va="top", path_effects=shadow)
+        ax.text(0.965, 0.955, f"{area:.0f} KM²", transform=ax.transAxes, color="#ffcf6b", fontproperties=subf_sm,
+                ha="right", va="top", path_effects=shadow)
+        ax.text(0.965, 0.915, phase, transform=ax.transAxes, color=(FLAME if phase == "FORECAST" else NEON),
+                fontproperties=subf_sm, ha="right", va="top", path_effects=shadow)
+        ax.plot([0.035, 0.035 + 0.93 * t / cfg.window_min], [0.052, 0.052], transform=ax.transAxes,
+                color=NEON, lw=2.6, alpha=0.9, solid_capstyle="round")
+
+        # Netflix-style narrated subtitle (bottom-center, white with soft dark stroke)
+        sub = sub_override if sub_override is not None else caption_for(t)
+        txt, a = (sub if isinstance(sub, tuple) else (sub, 1.0))
+        if txt and a > 0.02:
+            ax.add_patch(mpatches.Rectangle((0, 0), 1, 0.19, transform=ax.transAxes, zorder=8,
+                                            color="#05070d", alpha=0.22 * a))
+            ax.text(0.5, 0.105, txt, transform=ax.transAxes, ha="center", va="center", color="white",
+                    fontproperties=subf, alpha=a, zorder=9, path_effects=shadow, wrap=True)
+
+        if title_a > 0.02:  # opening title card
+            ax.add_patch(mpatches.Rectangle((0, 0), 1, 1, transform=ax.transAxes, zorder=10,
+                                            color="#05070d", alpha=0.45 * title_a))
+            ax.text(0.5, 0.56, cfg.name, transform=ax.transAxes, ha="center", va="center", color="white",
+                    fontproperties=titlef, alpha=title_a, zorder=11, path_effects=shadow)
+            ax.text(0.5, 0.47, "SATELLITE FIRE TRACKING · GOES-18", transform=ax.transAxes, ha="center",
+                    va="center", color=NEON, fontproperties=subf_sm, alpha=title_a, zorder=11, path_effects=shadow)
+        if black > 0.02:  # fade from black
+            ax.add_patch(mpatches.Rectangle((0, 0), 1, 1, transform=ax.transAxes, zorder=12,
+                                            color="black", alpha=black))
         fig.canvas.draw()
-        frames.append(np.asarray(fig.canvas.buffer_rgba())[..., :3].copy())
-    plt.close(fig)
-    frames += [frames[-1]] * (fps + 2)  # hold on the final frame
+        return np.asarray(fig.canvas.buffer_rgba())[..., :3].copy()
+
+    frames = []
+    for k in range(9):  # title card: fade in from black, title up
+        frames.append(render(0, title_a=min(1.0, k / 3.5), black=max(0.0, 1 - k / 3.0)))
+    for _ in range(3):
+        frames.append(render(0, title_a=1.0))
+    for k in range(4):
+        frames.append(render(0, title_a=max(0.0, 1 - k / 3.0)))  # title fades out
+    for t in np.linspace(0, cfg.window_min, 42):  # narrated timeline
+        frames.append(render(t))
+    for _ in range(fps + 6):  # hold with the summary line
+        frames.append(render(cfg.window_min, sub_override=(summary, 1.0)))
 
     out = EventPaths(f"retro_{cfg.key}").ensure().outputs / "figures" / "tracking.mp4"
-    imageio.mimwrite(out, frames, fps=fps, codec="libx264", quality=8, macro_block_size=16, output_params=["-pix_fmt", "yuv420p"])
+    imageio.mimwrite(out, frames, fps=fps, codec="libx264", quality=9, macro_block_size=16,
+                     output_params=["-pix_fmt", "yuv420p"])
+    plt.close(fig)
     import shutil
 
-    shutil.copy(out, REPO_ROOT / "docs" / "assets" / f"track_{cfg.key}.mp4")
+    assets = REPO_ROOT / "docs" / "assets"
+    shutil.copy(out, assets / f"track_{cfg.key}.mp4")
+    imageio.imwrite(assets / f"poster_{cfg.key}.png", frames[-22])  # a developed-fire frame as poster
     return str(out)
 
 
@@ -281,7 +363,7 @@ def run_historical(key: str, members: int = 28) -> dict:
 
     fig = tracking_figure(bundle, track, on, delta, cfg)
     try:
-        vid = tracking_video(bundle, track, on, cfg)
+        vid = tracking_video(bundle, track, on, cfg, delta=delta)
     except Exception as e:  # video is a bonus; never fail the run
         log.warning("video for %s failed: %s", cfg.key, e)
         vid = None
