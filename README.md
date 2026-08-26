@@ -137,29 +137,28 @@ That kind of honest failure analysis is a feature: it points squarely at the rem
 (finer VIIRS observations via a FIRMS key, better live fuel-moisture). This is what credible looks like
 on real data.
 
-### Historical fire tracking — real satellite object tracking (`make history`)
+### The FIREWATCH instrument — historical fire analysis (`make history`)
 
-Not synthetic: for three named historical wildfires, FIREWATCH pulls the **real GOES-18 active-fire
-time-series**, clusters the detections into fire objects and **tracks them over time** (DBSCAN + 
-nearest-centroid association — the core of multi-object tracking), and fuses that with the assimilating
-forecast over real terrain (Terrain Tiles), fuels (ESA WorldCover) and wind (HRRR). Every visualization
-below is a real tracking run — the fire growing, its tracked centroid path, spread rate and heading:
+A self-contained, dark, dense **scientific analysis tool** (in [`docs/history.html`](docs/history.html),
+`make history` regenerates it) that replays three real historical wildfires from GOES-18: an **events
+browser** (Park 2024, Palisades & Eaton 2025 — real locations, coordinates, dates, areas) opening into
+per-event tabs, all backed by real data:
 
-| 🔥 Park Fire (Jul 2024) | 🔥 Palisades Fire (Jan 2025) | 🔥 Eaton Fire (Jan 2025) |
-|---|---|---|
-| ![park](docs/assets/track_park.png) | ![palisades](docs/assets/track_palisades.png) | ![eaton](docs/assets/track_eaton.png) |
+- **Overview** — event metadata + the tracked fire state, driven by a shared time scrubber.
+- **Video** — the tracking + forecast time-lapses (autoplay), each with source provenance (GOES-18
+  ABI-L2-FDCC, ~5-min cadence, window).
+- **Images** — the evolution frames as a scientific archive: what the model shows/suggests at each time.
+- **Forecast** — a **real model-performance table** (per-horizon IoU baseline vs assimilation, Dice,
+  Brier, 90% coverage vs GOES-observed truth) + the ablation.
+- **Analysis** — the tracked fire-extent curve (SVG from real extents) + OSM exposure.
+- **Data** — every ingested observation with source, product, timestamp, pixel count, centroid, and
+  native resolution — the provenance behind every number.
 
-Each fire plays as **two sped-up time-lapse videos** (Netflix-style narrated subtitles) in a light
-editorial page — [`docs/history.html`](docs/history.html) (`make history` regenerates it):
-
-- **Satellite tracking** — the fire growing, its tracked centroid path, spread rate + heading.
-- **Decision response** — the operational forecast projecting forward from the observed perimeter,
-  **communities lighting up as they're flagged for evacuation** with lead-time + confidence values.
-  The real LA firestorm communities surface here — **Pacific Palisades**, Fernwood, Glenview (Palisades);
-  **Sierra Madre**, **Mount Wilson**, West Arcadia, Kinneloa Mesa (Eaton); Richardson Springs (Park).
-
-On all three, assimilation beats the no-assimilation baseline (mean perimeter IoU): Park
-**0.155 → 0.179**, Palisades **0.193 → 0.198**, Eaton **0.150 → 0.161** — consistent, honest, real-data gains.
+The tracker is real multi-object tracking (DBSCAN clustering of GOES fire pixels + nearest-centroid
+association); the fires are fused with the assimilating forecast over real terrain (Terrain Tiles),
+fuels (ESA WorldCover) and wind (HRRR). Assimilation beats the no-assimilation baseline on all three
+(mean perimeter IoU): Park **0.155 → 0.179**, Palisades **0.193 → 0.198**, Eaton **0.150 → 0.161** —
+modest, honest, real-data gains (GOES is coarse at ~2 km).
 
 ### Learned models (`make train`)
 

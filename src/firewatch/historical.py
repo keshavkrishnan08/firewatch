@@ -1,4 +1,4 @@
-"""Historical fire tracking + forecast on real GOES data — the 'nothing synthetic' showcase.
+"""Historical fire tracking + forecast on real GOES data — the historical-samples showcase.
 
 For each registered real fire (retrospective.RETRO_REGISTRY) this pulls the real GOES-18 active-fire
 time-series, runs the satellite fire tracker (forecast/tracking.py), runs the assimilating forecast
@@ -20,6 +20,7 @@ from firewatch.forecast.engine import run_forecast, skill_vs_truth
 from firewatch.forecast.ensemble import EnsembleConfig
 from firewatch.forecast.spread import burned_mask
 from firewatch.forecast.tracking import FireTrack, track_from_observations
+from firewatch.geo import polygon_area_m2
 from firewatch.ontology.store import Store
 from firewatch.retrospective import RETRO_REGISTRY, build_retro_bundle
 
@@ -143,7 +144,7 @@ def tracking_figure(bundle, track: FireTrack, on, ablation_delta: float | None, 
         lines.append(f"{'assimilation ΔIoU':>18} :  {ablation_delta:+.3f}")
     axs.text(0.02, 0.95, "\n".join(lines), color="#c7d0e0", family="monospace", fontsize=9.5,
              va="top", transform=axs.transAxes)
-    axs.text(0.02, 0.03, "real GOES-18 active fire · Terrain Tiles · ESA WorldCover · HRRR — nothing synthetic",
+    axs.text(0.02, 0.03, "GOES-18 active fire · Terrain Tiles · ESA WorldCover · HRRR",
              color="#4a5568", fontsize=7.5, va="bottom", transform=axs.transAxes)
 
     paths = EventPaths(f"retro_{cfg.key}").ensure()
@@ -496,6 +497,132 @@ def response_video(bundle, on, cfg, fps: int = 11, px: int = 640, threshold: flo
     return str(out), responses
 
 
+def evolution_frames(bundle, track, on, cfg, responses, n=6, px=560) -> list:
+    """Render N labeled snapshots across the fire's real evolution — what the model shows/suggests at
+    each time. Returns [{asset, t_min, phase, area_km2, caption}]. Saved to docs/assets/evo_<key>_i.png."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import imageio.v2 as imageio
+    import matplotlib.patheffects as pe
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import Normalize
+
+    from firewatch.geo import from_geojson
+
+    grid = bundle.grid
+    proj = grid.projector
+    ext = [grid._xs[0] / 1000, grid._xs[-1] / 1000, grid._ys[0] / 1000, grid._ys[-1] / 1000]
+    hs = _hillshade(grid.elevation, grid.cell_m)
+    goes = sorted([o for o in bundle.observations if o.kind.value == "goes" and o.geometry], key=lambda o: o.t)
+    t0 = goes[0].t if goes else bundle.ignition_time
+    det = []
+    for o in goes:
+        g = from_geojson(o.geometry)
+        for p in (g.geoms if g.geom_type == "MultiPoint" else [g]):
+            det.append(((o.t - t0).total_seconds() / 60.0, p.x, p.y))
+    det = np.array(det) if det else np.zeros((0, 3))
+    path = np.array([proj.to_local(*p.centroid) for p in track.points]) / 1000
+    ptimes = np.array([p.t_min for p in track.points])
+    ix, iy = np.array(proj.to_local(*bundle.ignition_lonlat)) / 1000
+    fp = on.expected_perimeter.get(cfg.horizons[-1])
+    heading = _compass(track.net_heading_deg())
+    norm = Normalize(0, cfg.window_min)
+    shadow = [pe.withStroke(linewidth=2.6, foreground=(0, 0, 0, 0.8))]
+    subf, subf_sm = _subtitle_font(13, "medium"), _subtitle_font(10, "regular")
+
+    times = list(np.linspace(0, cfg.window_min, n))
+    assets = REPO_ROOT / "docs" / "assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    dpi = 100
+    fig = plt.figure(figsize=(px / dpi, px / dpi), dpi=dpi, facecolor="#05070d")
+    ax = fig.add_axes([0, 0, 1, 1])
+    out = []
+    for i, t in enumerate(times):
+        ax.clear()
+        ax.set_facecolor("#05070d")
+        ax.imshow(hs, origin="lower", cmap="gray", extent=ext, alpha=0.5, vmin=-0.2, vmax=1.2, zorder=0)
+        ax.imshow(np.where(grid.fuel == 0, 1.0, np.nan), origin="lower", extent=ext, cmap="Blues", alpha=0.16, zorder=1)
+        poly = grid.mask_to_polygon(burned_mask(bundle.truth_arrival, t))
+        area = 0.0
+        if poly is not None:
+            area = polygon_area_m2(poly) / 1e6
+            for pg in (poly.geoms if poly.geom_type == "MultiPolygon" else [poly]):
+                if pg.is_empty or not hasattr(pg, "exterior"):
+                    continue
+                xs, ys = proj.to_local(*np.asarray(pg.exterior.coords).T)
+                ax.fill(xs / 1000, ys / 1000, color=FLAME, alpha=0.2, zorder=2)
+                ax.plot(xs / 1000, ys / 1000, color="#ffcf6b", lw=1.6, alpha=0.95, zorder=3)
+        if len(det):
+            m = det[:, 0] <= t + 1e-6
+            if m.any():
+                dl = np.array([proj.to_local(x, y) for x, y in det[m, 1:3]]) / 1000
+                ax.scatter(dl[:, 0], dl[:, 1], s=16, c=det[m, 0], cmap="inferno", norm=norm,
+                           edgecolor="#ffdca8", linewidths=0.25, alpha=0.85, zorder=4)
+        pm = ptimes <= t + 1e-6
+        if pm.sum() >= 2:
+            ax.plot(path[pm, 0], path[pm, 1], color=NEON, lw=2.4, alpha=0.9, solid_capstyle="round", zorder=5)
+        post_issue = t >= cfg.assim_min
+        if post_issue and fp is not None:
+            for pg in (fp.geoms if fp.geom_type == "MultiPolygon" else [fp]):
+                if pg.is_empty or not hasattr(pg, "exterior"):
+                    continue
+                xs, ys = proj.to_local(*np.asarray(pg.exterior.coords).T)
+                ax.plot(xs / 1000, ys / 1000, color=FLAME, lw=2, ls="--", alpha=0.95, zorder=5)
+        ax.plot(ix, iy, "*", color="#ffd23f", ms=15, mec="black", mew=0.5, zorder=6)
+        ax.set_xlim(ext[0], ext[1])
+        ax.set_ylim(ext[2], ext[3])
+        ax.axis("off")
+        # what the model is doing / suggesting at this time
+        if not post_issue:
+            phase = "Tracking"
+            caption = f"Tracking the fire front · {area:.0f} km² · spreading {heading}"
+        else:
+            n_flag = sum(1 for r in responses if cfg.assim_min + r["lead_min"] <= t)
+            pop = sum(r.get("residents", 0) for r in responses if cfg.assim_min + r["lead_min"] <= t)
+            phase = "Forecast"
+            if n_flag:
+                popl = f"~{pop / 1000:.0f}K residents" if pop >= 1000 else f"~{pop} residents"
+                caption = f"Forecast — {n_flag} communit{'y' if n_flag == 1 else 'ies'} flagged · {popl} at risk"
+            else:
+                caption = "Forecast issued — projecting spread & exposure"
+        ax.text(0.035, 0.955, f"T+{t:.0f} MIN", transform=ax.transAxes, color=NEON, fontproperties=subf_sm,
+                va="top", path_effects=shadow)
+        ax.text(0.965, 0.955, f"{area:.0f} KM²", transform=ax.transAxes, color="#ffcf6b", fontproperties=subf_sm,
+                ha="right", va="top", path_effects=shadow)
+        pill = "#ff6a5c" if post_issue else NEON
+        ax.text(0.5, 0.06, caption, transform=ax.transAxes, ha="center", va="center", color="white",
+                fontproperties=subf, path_effects=shadow, zorder=9)
+        ax.text(0.5, 0.955, phase.upper(), transform=ax.transAxes, ha="center", va="top", color=pill,
+                fontproperties=subf_sm, path_effects=shadow)
+        fig.canvas.draw()
+        frame = np.asarray(fig.canvas.buffer_rgba())[..., :3]
+        name = f"evo_{cfg.key}_{i}.png"
+        imageio.imwrite(assets / name, frame)
+        out.append({"asset": name, "t_min": round(float(t)), "phase": phase,
+                    "area_km2": round(area, 1), "caption": caption})
+    plt.close(fig)
+    return out
+
+
+def _observation_rows(bundle) -> list[dict]:
+    """Real observation provenance: one row per ingested Observation (source · product · time · geometry)."""
+    from firewatch.geo import from_geojson
+
+    rows = []
+    for o in sorted(bundle.observations, key=lambda x: x.t):
+        g = from_geojson(o.geometry)
+        n = len(g.geoms) if (g is not None and g.geom_type == "MultiPoint") else (0 if g is None else 1)
+        c = g.centroid if g is not None and not g.is_empty else None
+        rows.append({
+            "t_utc": o.t.strftime("%Y-%m-%d %H:%M UTC"),
+            "source": o.provenance.source, "product": o.provenance.product,
+            "kind": o.kind.value, "n_pixels": n,
+            "lat": round(c.y, 4) if c else None, "lon": round(c.x, 4) if c else None,
+            "resolution_m": o.provenance.native_resolution_m,
+        })
+    return rows
+
+
 def run_historical(key: str, members: int = 28) -> dict:
     warnings.simplefilter("ignore")
     cfg = RETRO_REGISTRY[key]
@@ -527,6 +654,11 @@ def run_historical(key: str, members: int = 28) -> dict:
     except Exception as e:
         log.warning("response video for %s failed: %s", cfg.key, e)
         rvid, responses = None, []
+    try:
+        evolution = evolution_frames(bundle, track, on, cfg, responses, n=6)
+    except Exception as e:
+        log.warning("evolution frames for %s failed: %s", cfg.key, e)
+        evolution = []
     result = {
         "key": cfg.key, "name": cfg.name, "start_utc": cfg.start_utc,
         "n_frames": track.n_frames, "goes_detections": track.total_detections,
@@ -540,7 +672,18 @@ def run_historical(key: str, members: int = 28) -> dict:
         "response_asset": (f"response_{cfg.key}.mp4" if rvid else None),
         "responses": responses, "n_flagged": len(responses),
         "residents_at_risk": sum(r.get("residents", 0) for r in responses),
+        "evolution": evolution,
         "feeds": sorted({o.provenance.source for o in bundle.observations}),
+        # real per-horizon model performance vs GOES-observed truth (the ML metrics table)
+        "skill_by_horizon": [
+            {"horizon_min": h, "iou_on": round(so[h]["iou"], 3), "iou_off": round(sf[h]["iou"], 3),
+             "dice_on": round(so[h]["dice"], 3), "brier_on": round(so[h]["brier"], 4),
+             "coverage90": round(so[h]["coverage_90"], 2)}
+            for h in cfg.horizons],
+        # real observation provenance (the Data tab) — each GOES active-fire timestep
+        "observations": _observation_rows(bundle),
+        "center": [round(cfg.center_lat, 4), round(cfg.center_lon, 4)],
+        "assim_min": cfg.assim_min, "window_min": cfg.window_min,
     }
     (paths.outputs / "tracking.json").write_text(json.dumps(result, indent=2, default=str))
     store.close()
