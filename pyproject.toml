@@ -32,11 +32,11 @@ dependencies = [
 [project.optional-dependencies]
 # Heavy / feed-specific extras. Core forecast + decision + georeference run without these.
 geo = ["rasterio>=1.3", "geopandas>=0.14", "xarray>=2024.1", "rioxarray"]
-sat = ["goes2go", "herbie-data", "cfgrib", "eccodes", "s3fs", "netCDF4"]
+sat = ["goes2go", "herbie-data", "cfgrib", "eccodes", "s3fs", "netCDF4", "h5py", "h5netcdf"]
 osm = ["osmnx>=1.9"]
 perception = ["opencv-python", "Pillow"]
-# ML perception (optional, needs GPU + model weights):
-ml = ["ultralytics", "torch"]
+# ML: learned surrogate + real YOLO/SAM2 detection (torch has py3.14 wheels; MPS/CUDA optional):
+ml = ["torch>=2.2", "torchvision", "ultralytics", "scikit-learn"]
 accel = ["numba>=0.59"]
 dev = ["pytest>=8", "ruff>=0.4", "httpx>=0.27"]
 

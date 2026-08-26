@@ -85,7 +85,7 @@ def build_event(event_id: str, store: Store) -> EventBundle:
         from firewatch.terrain import DEM
 
         d = DEM(lat0, lon0, cell_m, np.full((n, n), 300.0))
-    fuelinfo = landfire.fetch_fuel(d, event_id=event_id)
+    fuelinfo = landfire.fetch_fuel(d, event_id=event_id, bbox=bbox)
     wind = hrrr.fetch_wind(lat0, lon0, now, event_id=event_id)
 
     grid = FireGrid(
