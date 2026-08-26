@@ -389,10 +389,10 @@ def response_video(bundle, on, cfg, fps: int = 11, px: int = 640, threshold: flo
         c = z.geom().centroid
         cx, cy = np.array(proj.to_local(c.x, c.y)) / 1000
         zinfo.append({"name": z.name, "xy": (cx, cy), "flag": flag, "lead": flag,
-                      "conf": float(dist.prob_burned_by(span))})
+                      "conf": float(dist.prob_burned_by(span)), "pop": int(getattr(z, "population", 0) or 0)})
     flagged = sorted([z for z in zinfo if z["flag"] is not None], key=lambda z: z["flag"])
-    responses = [{"zone": z["name"], "lead_min": round(z["lead"]), "confidence": round(z["conf"], 2)}
-                 for z in flagged[:6]]
+    responses = [{"zone": z["name"], "lead_min": round(z["lead"]), "confidence": round(z["conf"], 2),
+                  "residents": z["pop"]} for z in flagged[:6]]
 
     subf, subf_sm = _subtitle_font(15), _subtitle_font(11, "regular")
     shadow = [pe.withStroke(linewidth=3.0, foreground=(0, 0, 0, 0.75))]
@@ -420,24 +420,30 @@ def response_video(bundle, on, cfg, fps: int = 11, px: int = 640, threshold: flo
             for ln in geoms:
                 xs, ys = proj.to_local(*np.asarray(ln.coords).T)
                 ax.plot(xs / 1000, ys / 1000, color="#5a6785", lw=0.6, alpha=0.5, zorder=3)
-        # zone markers, colored by threat status at h
-        n_flag = 0
+        # zone markers, colored by threat status at h; flagged ones pulse with an expanding ring
+        n_flag, pop_risk = 0, 0
+        pulse = 0.5 + 0.5 * np.sin(h / 9.0)
         for z in zinfo:
             active = z["flag"] is not None and h >= z["flag"] - 1e-6
+            warn = z["flag"] is not None and (z["flag"] - 45) <= h < z["flag"]
             if active:
                 n_flag += 1
-            col = "#ff3b30" if active else ("#ffd23f" if (z["flag"] and h >= z["flag"] - 45) else "#7bd88f")
-            sz = (70 + 40 * (0.5 + 0.5 * np.sin(h / 10))) if active else 26
-            ax.scatter(*z["xy"], s=sz, facecolor=col, edgecolor="white", linewidths=0.6,
-                       alpha=0.95 if active else 0.6, zorder=5)
-        # callouts for the most urgent freshly-flagged zones
+                pop_risk += z["pop"]
+                ax.scatter(*z["xy"], s=340 + 220 * pulse, facecolor="none", edgecolor="#ff3b30",
+                           linewidths=1.3, alpha=0.30 * (1 - pulse) + 0.12, zorder=4)  # expanding ring
+            col = "#ff3b30" if active else ("#ffd23f" if warn else "#7bd88f")
+            sz = (150 + 60 * pulse) if active else (70 if warn else 34)
+            ax.scatter(*z["xy"], s=sz, facecolor=col, edgecolor="white", linewidths=0.9,
+                       alpha=0.97 if active else 0.65, zorder=5)
+        # callouts for the most urgent freshly-flagged zones (name · lead · confidence · population)
         for z in flagged[:5]:
-            if z["flag"] is not None and z["flag"] - step <= h <= z["flag"] + 6 * step:
+            if z["flag"] is not None and z["flag"] - step <= h <= z["flag"] + 7 * step:
                 lead_lbl = "imminent" if z["lead"] < 1 else f"{z['lead']:.0f} min"
-                ax.annotate(f"⚠ {z['name']}\n{lead_lbl} · {z['conf']:.0%}",
-                            xy=z["xy"], xytext=(z["xy"][0] + 2.2, z["xy"][1] + 2.2),
+                pop_lbl = f"\n{z['pop']:,} residents" if z["pop"] else ""
+                ax.annotate(f"⚠ {z['name']}\n{lead_lbl} · {z['conf']:.0%}{pop_lbl}",
+                            xy=z["xy"], xytext=(z["xy"][0] + 2.4, z["xy"][1] + 2.4),
                             color="white", fontproperties=subf_sm, zorder=6, path_effects=shadow,
-                            arrowprops=dict(arrowstyle="-", color="#ff3b30", lw=1.2))
+                            arrowprops=dict(arrowstyle="-", color="#ff3b30", lw=1.3))
         ax.plot(ix, iy, "*", color="#ffd23f", ms=16, mec="black", mew=0.5, zorder=7)
         ax.set_xlim(ext[0], ext[1])
         ax.set_ylim(ext[2], ext[3])
@@ -448,6 +454,9 @@ def response_video(bundle, on, cfg, fps: int = 11, px: int = 640, threshold: flo
                 fontproperties=subf_sm, va="top", path_effects=shadow)
         ax.text(0.965, 0.955, f"{n_flag} ZONE{'S' if n_flag != 1 else ''} FLAGGED", transform=ax.transAxes,
                 color="#ff3b30", fontproperties=subf_sm, ha="right", va="top", path_effects=shadow)
+        pr_lbl = f"{pop_risk / 1000:.1f}K" if pop_risk >= 1000 else f"{pop_risk}"
+        ax.text(0.965, 0.915, f"~{pr_lbl} RESIDENTS AT RISK", transform=ax.transAxes,
+                color="#ffb03a", fontproperties=subf_sm, ha="right", va="top", path_effects=shadow)
         # dynamic subtitle carrying the response VALUE
         if sub_override is not None:
             txt = sub_override
@@ -469,8 +478,9 @@ def response_video(bundle, on, cfg, fps: int = 11, px: int = 640, threshold: flo
 
     frames = [render(h) for h in horizons]
     nf = len(flagged)
-    summary = (f"{nf} {'community' if nf == 1 else 'communities'} flagged · earliest warning "
-               + ("imminent" if flagged and flagged[0]['lead'] < 1 else f"{flagged[0]['lead']:.0f} min lead")
+    total_pop = sum(z["pop"] for z in flagged)
+    pop_lbl = f"~{total_pop / 1000:.0f}K residents" if total_pop >= 1000 else f"~{total_pop} residents"
+    summary = (f"{nf} {'community' if nf == 1 else 'communities'} flagged · {pop_lbl} at risk"
                if flagged else "No communities crossed the evacuation threshold in-window")
     frames += [render(span, sub_override=summary)] * (fps + 6)
 
@@ -529,6 +539,7 @@ def run_historical(key: str, members: int = 28) -> dict:
         "video": vid, "video_asset": (f"track_{cfg.key}.mp4" if vid else None),
         "response_asset": (f"response_{cfg.key}.mp4" if rvid else None),
         "responses": responses, "n_flagged": len(responses),
+        "residents_at_risk": sum(r.get("residents", 0) for r in responses),
         "feeds": sorted({o.provenance.source for o in bundle.observations}),
     }
     (paths.outputs / "tracking.json").write_text(json.dumps(result, indent=2, default=str))
