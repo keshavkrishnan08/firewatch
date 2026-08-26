@@ -46,26 +46,40 @@ def build(out_path: Path) -> Path:
     tot_frames = sum(d["n_frames"] for d in data)
     mean_ros = sum(d["mean_ros_kmh"] for d in data) / len(data)
 
+    asset_dir = REPO / "docs" / "assets"
+
+    def scope(mp4, poster_name, fallback_png, label, tag):
+        v = asset_dir / (mp4 or "")
+        if mp4 and v.exists():
+            p = asset_dir / (poster_name or "")
+            pa = f' poster="{_b64(p, "image/png")}"' if p.exists() else ""
+            inner = (f'<video autoplay loop muted playsinline preload="auto"{pa} aria-label="{label}">'
+                     f'<source src="{_b64(v, "video/mp4")}" type="video/mp4"></video>')
+        else:
+            inner = f'<img loading="lazy" src="{_b64(asset_dir / fallback_png, "image/png")}" alt="{label}">'
+        return f'<figure class="scope-cell"><span class="scope-tag">{tag}</span>{inner}</figure>'
+
     modules = []
     for i, d in enumerate(data, 1):
         m = FIRE_META.get(d["key"], {"loc": "", "when": d["start_utc"][:10], "blurb": ""})
-        asset_dir = REPO / "docs" / "assets"
-        vid_file = asset_dir / (d.get("video_asset") or "")
-        poster_file = asset_dir / f"poster_{d['key']}.png"
-        if d.get("video_asset") and vid_file.exists():
-            poster = f' poster="{_b64(poster_file, "image/png")}"' if poster_file.exists() else ""
-            media = (f'<video class="scope" autoplay loop muted playsinline preload="auto"{poster} '
-                     f'aria-label="Time-lapse fire tracking — {d["name"]}">'
-                     f'<source src="{_b64(vid_file, "video/mp4")}" type="video/mp4"></video>'
-                     f'<span class="replay">▶ time-lapse · GOES-18</span>')
-        else:
-            media = f'<img class="scope" loading="lazy" src="{_b64(asset_dir / d["asset"], "image/png")}" alt="{d["name"]}">'
+        track = scope(d.get("video_asset"), f"poster_{d['key']}.png", d["asset"],
+                      f"Satellite tracking — {d['name']}", "◈ Satellite tracking")
+        resp = scope(d.get("response_asset"), f"response_poster_{d['key']}.png", d["asset"],
+                     f"Decision response — {d['name']}", "⚠ Decision response")
         heading = COMPASS[int(((d["heading_deg"] % 360) + 11.25) // 22.5) % 16]
         delta = d["ablation_delta_iou"]
         badge = f'<span class="badge up">assimilation +{delta:.3f} IoU</span>' if delta > 0 else f'<span class="badge">assimilation {delta:+.3f} IoU</span>'
+        rr = d.get("responses", [])[:5]
+        rows = "".join(
+            f'<li><span class="rz">{r["zone"]}</span>'
+            f'<span class="rv">{"imminent" if r["lead_min"] < 1 else str(r["lead_min"]) + " min"} · {r["confidence"] * 100:.0f}%</span></li>'
+            for r in rr)
+        nfl = d.get("n_flagged", 0)
+        responses_html = (f'<div class="responses"><span class="skill-label">Evacuation responses issued'
+                          f' · {nfl} communit{"y" if nfl == 1 else "ies"}</span><ul>{rows}</ul></div>') if rr else ""
         modules.append(f"""
       <article class="module reveal">
-        <div class="scope-wrap">{media}</div>
+        <div class="scope-wrap"><div class="scopes">{track}{resp}</div></div>
         <div class="panel">
           <header class="mod-head">
             <span class="idx">{i:02d}</span>
@@ -74,13 +88,12 @@ def build(out_path: Path) -> Path:
           {badge}
           <p class="blurb">{m['blurb']}</p>
           <dl class="readout">
-            <div><dt>Frames</dt><dd>{d['n_frames']}</dd></div>
             <div><dt>Detections</dt><dd>{d['goes_detections']}<span>px</span></dd></div>
             <div><dt>Peak extent</dt><dd>{d['peak_area_km2']:.0f}<span>km²</span></dd></div>
             <div><dt>Spread rate</dt><dd>{d['mean_ros_kmh']:.1f}<span>km/h</span></dd></div>
-            <div><dt>Growth</dt><dd>{d['growth_km2_per_h']:.0f}<span>km²/h</span></dd></div>
             <div><dt>Heading</dt><dd>{heading}<span>{d['heading_deg']:.0f}°</span></dd></div>
           </dl>
+          {responses_html}
           <div class="skill">
             <span class="skill-label">Forecast skill vs GOES truth — mean perimeter IoU</span>
             <div class="bar"><span>baseline</span><span class="track"><i style="width:{_bar(d['iou_off'])}%"></i></span><b>{d['iou_off']:.3f}</b></div>
@@ -156,14 +169,23 @@ h1 em{{font-style:italic;color:var(--ember);font-weight:500}}
 main{{padding:24px 0 10px;display:flex;flex-direction:column;gap:26px}}
 .module{{background:var(--card);border:1px solid var(--edge);border-radius:20px;overflow:hidden;
   display:grid;grid-template-columns:1fr .92fr;gap:0}}
-.scope-wrap{{position:relative;padding:16px;background:var(--bg-2);border-right:1px solid var(--edge);
-  display:flex;align-items:center;justify-content:center}}
-.scope{{width:100%;max-width:520px;aspect-ratio:1/1;border-radius:14px;display:block;object-fit:cover;
-  background:#05070d;box-shadow:var(--scope-shadow)}}
-.replay{{position:absolute;left:26px;bottom:26px;font-family:"IBM Plex Mono";font-size:10.5px;
-  letter-spacing:.08em;color:#cfe;background:rgba(5,7,13,.62);border:1px solid rgba(120,200,190,.3);
-  padding:4px 9px;border-radius:100px;backdrop-filter:blur(4px)}}
-.panel{{padding:26px 28px;display:flex;flex-direction:column;gap:16px}}
+.scope-wrap{{padding:16px;background:var(--bg-2);border-right:1px solid var(--edge)}}
+.scopes{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
+.scope-cell{{position:relative;margin:0}}
+.scope-cell video,.scope-cell img{{width:100%;aspect-ratio:1/1;border-radius:12px;display:block;
+  object-fit:cover;background:#05070d;box-shadow:var(--scope-shadow)}}
+.scope-tag{{position:absolute;left:10px;bottom:10px;font-family:"IBM Plex Mono";font-size:9.5px;
+  letter-spacing:.06em;color:#e9f2ff;background:rgba(5,7,13,.6);border:1px solid rgba(150,170,210,.28);
+  padding:3px 8px;border-radius:100px;backdrop-filter:blur(4px)}}
+.panel{{padding:26px 28px;display:flex;flex-direction:column;gap:15px}}
+.responses{{border-top:1px solid var(--edge);padding-top:14px}}
+.responses ul{{list-style:none;margin:9px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}}
+.responses li{{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  border-left:2px solid var(--ember);padding:2px 0 2px 10px}}
+.responses .rz{{font-weight:600;font-size:14px}}
+.responses .rz::before{{content:"⚠ ";color:var(--ember)}}
+.responses .rv{{font-family:"IBM Plex Mono";font-size:11.5px;color:var(--muted);white-space:nowrap;
+  font-variant-numeric:tabular-nums}}
 .mod-head{{display:flex;align-items:center;gap:14px}}
 .idx{{font-family:"Fraunces",serif;font-weight:600;font-size:22px;color:var(--teal-deep);
   border:1px solid var(--edge-2);border-radius:10px;padding:3px 11px}}
@@ -212,7 +234,8 @@ footer code{{font-family:"IBM Plex Mono";color:var(--muted)}}
   <h1>Tracking wildfires <em>from orbit.</em></h1>
   <p class="lede">Real <b>GOES-18</b> active-fire detections, clustered into fire objects and
   <b>tracked over time</b>, then fused with a physics + data-assimilation spread forecast over real
-  terrain and fuels. Three named fires, played back from the first satellite detection.
+  terrain and fuels. Each fire plays as two time-lapses — the <b>satellite tracking</b> and the
+  <b>decision response</b> that flags exposed communities with lead-time and confidence.
   <span class="ns">Nothing synthetic.</span></p>
   <div class="ribbon">
     <div class="stat"><div class="k">Fires tracked</div><div class="v">{len(data)}</div></div>
