@@ -93,6 +93,28 @@ PIPELINE = [
 ]
 
 
+# per-stage workflow (input -> process steps -> output), for the Lucidchart-style diagrams
+STAGE_IO = {
+    "ingest": (["GOES-18 ABI", "VIIRS / MODIS", "NOAA HRRR", "Terrain Tiles", "ESA WorldCover", "NIFC · OSM"],
+               ["Fetch per feed", "Attach provenance", "Write Observation objects"],
+               ["Time-versioned ontology"]),
+    "perception": (["Camera frame"], ["Detector (YOLO / RT-DETR)", "Segment plume (SAM 2 / U-Net)", "Smoke-state features"],
+                   ["Plume mask + features"]),
+    "georeference": (["Plume mask", "Camera pose", "DEM"], ["Cast rays through pixels", "Intersect with terrain", "Skyline self-calibration"],
+                     ["Fire front (lat/lon ± cone)"]),
+    "tracking": (["Active-fire pixels"], ["Cluster (DBSCAN)", "Associate across time", "Estimate ROS + heading"],
+                 ["Tracked fire object"]),
+    "forecast": (["Fuel · slope · wind", "Ignition / perimeter"], ["Rothermel rate-of-spread", "Minimum-travel-time solve", "Perturbed ensemble"],
+                 ["Burn-probability field"]),
+    "assimilation": (["Ensemble", "New observations"], ["Score members by likelihood", "Reweight (particle filter)", "Resample + jitter"],
+                     ["Corrected forecast"]),
+    "calibration": (["Probability field", "Observed outcome"], ["Reliability + Brier + CRPS", "Temperature / isotonic"],
+                    ["Calibrated probabilities"]),
+    "decision": (["Calibrated forecast", "Population · roads (OSM)"], ["Overlay exposure", "Time-to-threat", "Confidence bands"],
+                 ["Exposure estimate → human"]),
+}
+
+
 def _park_bundle():
     from firewatch.forecast.tracking import track_from_observations
     from firewatch.ontology.store import Store
@@ -342,6 +364,32 @@ def results_figures(events):
         ax.set_ylabel("fraction of truth inside 90% region", color=MUT, fontsize=8)
         ax.legend(fontsize=8, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT)
         out["coverage"] = save(fig, "coverage")
+
+    # improvement from assimilation, per fire (IoU gain bar)
+    fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG); _style(ax, "Improvement from live data (mean IoU gain)")
+    ax.bar(names, [e["ablation_delta_iou"] for e in events], color=BLUE, width=0.5)
+    ax.axhline(0, color=GRID, lw=1)
+    ax.set_ylabel("IoU gain", color=MUT, fontsize=8)
+    out["improvement"] = save(fig, "improvement")
+
+    # Brier score by horizon (lower is better), per fire
+    if hs:
+        fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG); _style(ax, "Forecast error (Brier score, lower is better)")
+        for e in events:
+            sk = e.get("skill_by_horizon", [])
+            if sk and "brier_on" in sk[0]:
+                ax.plot([s["horizon_min"] for s in sk], [s.get("brier_on", 0) for s in sk], "-o", ms=3, lw=1.8,
+                        color=cols.get(e["key"], TXT), label=e["name"].split(" (")[0])
+        ax.set_xlabel("horizon (min)", color=MUT, fontsize=8)
+        ax.set_ylabel("Brier", color=MUT, fontsize=8)
+        ax.legend(fontsize=8, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT)
+        out["brier"] = save(fig, "brier")
+
+    # peak extent by fire (bar) in km^2 and acres
+    fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG); _style(ax, "Peak tracked extent by fire")
+    ax.bar(names, [e["peak_area_km2"] for e in events], color=FIRE, width=0.5)
+    ax.set_ylabel("km²", color=MUT, fontsize=8)
+    out["extent"] = save(fig, "extent")
     return out
 
 
@@ -366,19 +414,26 @@ def demo_video(key="park"):
     return out.name
 
 
-def build_showcase():
+def build_showcase(figures: bool = True):
     warnings.simplefilter("ignore")
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     events = json.loads((REPO_ROOT / "outputs" / "historical.json").read_text())
-    log.info("generating pipeline figures…")
-    stages = pipeline_figures()
+    if figures or not (ASSETS / "stage_ingest.png").exists():
+        log.info("generating pipeline figures…")
+        stages = pipeline_figures()
+    else:
+        log.info("reusing existing pipeline figures…")
+        stages = {sid: (f"stage_{sid}.png" if (ASSETS / f"stage_{sid}.png").exists() else None) for sid, *_ in PIPELINE}
     log.info("generating results graphs…")
     results = results_figures(events)
     log.info("assembling demo video…")
     demo = demo_video("park")
     manifest = {
         "demo": demo,
-        "pipeline": [{"id": sid, "title": t, "subtitle": st, "desc": d, "figure": stages.get(sid)}
+        "pipeline": [{"id": sid, "title": t, "subtitle": st, "desc": d, "figure": stages.get(sid),
+                      "inputs": STAGE_IO.get(sid, ([], [], []))[0],
+                      "process": STAGE_IO.get(sid, ([], [], []))[1],
+                      "outputs": STAGE_IO.get(sid, ([], [], []))[2]}
                      for (sid, t, st, d) in PIPELINE],
         "results": results,
     }

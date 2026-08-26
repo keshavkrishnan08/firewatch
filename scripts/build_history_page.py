@@ -72,6 +72,7 @@ def build(out_path: Path) -> Path:
         })
 
     pipeline = [{"title": s["title"], "subtitle": s["subtitle"], "desc": s["desc"],
+                 "inputs": s.get("inputs", []), "process": s.get("process", []), "outputs": s.get("outputs", []),
                  "figure": img(ASSETS / s["figure"], 760) if s.get("figure") and (ASSETS / s["figure"]).exists() else ""}
                 for s in show.get("pipeline", [])]
     results = {k: img(ASSETS / fn, 900) for k, fn in (show.get("results") or {}).items() if fn and (ASSETS / fn).exists()}
@@ -80,7 +81,9 @@ def build(out_path: Path) -> Path:
              "track_desc": TRACK_DESC, "resp_desc": RESP_DESC}
     html = TEMPLATE.replace("/*__DATA__*/", json.dumps(model, separators=(",", ":")))
     out_path.write_text(html)
-    print(f"wrote {out_path} ({out_path.stat().st_size // 1024} KB, {len(events)} fires, {len(pipeline)} stages)")
+    # also write index.html next to it so a static server serves the page at the root URL
+    (out_path.parent / "index.html").write_text(html)
+    print(f"wrote {out_path} + index.html ({out_path.stat().st_size // 1024} KB, {len(events)} fires, {len(pipeline)} stages)")
     return out_path
 
 
@@ -141,6 +144,14 @@ th{text-align:left;color:var(--text-3);font-weight:500;font-size:11px;padding:10
 td{padding:10px 12px;border-bottom:1px solid var(--surface-2);color:var(--text-2)}
 td.num{text-align:right;color:var(--text)}.hi{color:var(--blue)}
 .note{color:var(--text-3);font-size:13px;margin-top:12px}
+.vleg{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;padding:12px 16px;border:1px solid var(--border);
+  border-radius:8px;background:var(--surface);font-size:12.5px;color:var(--text-2)}
+.vleg span{display:inline-flex;align-items:center}
+.vleg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:7px}
+.stagewrap{border-bottom:1px solid var(--border);padding-bottom:20px}
+.stagewrap .stage{border-bottom:none;padding-bottom:8px}
+.wf{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto}
+svg text{font-family:var(--sans)}
 @media(max-width:820px){.g2{grid-template-columns:1fr}.stage,.stage:nth-child(even){grid-template-columns:1fr}
   .stage:nth-child(even) .fig{order:0}.strip{grid-template-columns:repeat(3,1fr)}.nav{gap:10px}.tab{padding:16px 8px}}
 </style>
@@ -156,7 +167,7 @@ td.num{text-align:right;color:var(--text)}.hi{color:var(--blue)}
 const FW=/*__DATA__*/;
 const app=document.getElementById('app');
 const esc=s=>(s==null?'':(''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])));
-const TABS=[['overview','Overview'],['fires','Fires'],['pipeline','How it works'],['results','Results']];
+const TABS=[['overview','Overview'],['fires','Fires'],['pipeline','How it works'],['results','Results'],['ops','Who it helps']];
 let tab='overview';
 document.getElementById('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab" data-t="${k}">${l}</button>`).join('');
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.t;location.hash='#/'+tab;render();});
@@ -166,7 +177,64 @@ function vd(src,poster,label){return src?`<figure style="margin:0">
   <figcaption style="font-size:12.5px;color:var(--text-3);margin-top:8px">${label}</figcaption></figure>`:'';}
 function play(){document.querySelectorAll('video').forEach(v=>{v.muted=true;const p=v.play();if(p&&p.catch)p.catch(()=>{});});}
 function render(){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
-  ({overview:vO,fires:vF,pipeline:vP,results:vR}[tab]||vO)();play();}
+  ({overview:vO,fires:vF,pipeline:vP,results:vR,ops:vOps}[tab]||vO)();play();}
+
+const videoLegend=`<div class="vleg">
+  <span><i style="background:var(--fire-2)"></i>Fire the satellite sees</span>
+  <span><i style="background:#4ff0d0"></i>Path the model tracks</span>
+  <span><i style="background:var(--fire);border-radius:0;height:0;border-top:2px dashed var(--fire);width:14px"></i>Model forecast (dashed)</span>
+  <span><i style="background:var(--fire);opacity:.55"></i>Burn probability (yellow to red)</span>
+  <span><i style="background:#7bd88f"></i>Town safe</span>
+  <span><i style="background:#ff3b30"></i>Town flagged</span>
+  <span><i style="background:var(--blue)"></i>What the model is doing</span></div>`;
+
+// Lucidchart-style boxes/arrows
+function box(x,y,w,h,label,kind){const c={data:'#2a3038',model:'#1e3a5f',fire:'#5a2f28',out:'#1f3b30'}[kind]||'#20262e';
+  const s={data:'#3a434e',model:'var(--blue)',fire:'var(--fire)',out:'#3aa06f'}[kind]||'#3a434e';
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${c}" stroke="${s}" stroke-width="1"/>
+    <text x="${x+w/2}" y="${y+h/2+4}" fill="#e7eaed" font-size="12" text-anchor="middle" font-family="var(--sans)">${label}</text>`;}
+function arrow(x1,y1,x2,y2){return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#5a6470" stroke-width="1.4" marker-end="url(#ah)"/>`;}
+const defs=`<defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+  <path d="M0,0 L6,3 L0,6 Z" fill="#5a6470"/></marker></defs>`;
+
+function stepDiagram(s){
+  const iw=150,pw=200,ow=170,h=34,gap=12,pad=16;
+  const rows=Math.max(s.inputs.length,s.process.length,s.outputs.length);
+  const H=pad*2+rows*(h+gap)-gap, W=760;
+  const col=(items,x,w,kind)=>items.map((it,i)=>box(x,pad+i*(h+gap)+(rows-items.length)*(h+gap)/2,w,h,esc(it),kind)).join('');
+  const ix=pad, px=(W-pw)/2, ox=W-ow-pad;
+  const aI=s.inputs.map((_,i)=>arrow(ix+iw,pad+i*(h+gap)+(rows-s.inputs.length)*(h+gap)/2+h/2,px, H/2)).join('');
+  const aO=arrow(px+pw,H/2,ox,H/2);
+  const pArr=s.process.slice(0,-1).map((_,i)=>{const y=pad+i*(h+gap)+(rows-s.process.length)*(h+gap)/2+h; return arrow(px+pw/2,y,px+pw/2,y+gap);}).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">${defs}
+    ${aI}${aO}${pArr}
+    ${col(s.inputs,ix,iw,'data')}${col(s.process,px,pw,'model')}${col(s.outputs,ox,ow,'out')}
+    <text x="${ix}" y="12" fill="#69707a" font-size="10">INPUT</text>
+    <text x="${px}" y="12" fill="#69707a" font-size="10">PROCESS</text>
+    <text x="${ox}" y="12" fill="#69707a" font-size="10">OUTPUT</text></svg>`;}
+
+function overallDiagram(){
+  const W=760,bw=150,bh=32;
+  const rows=[
+    [['Satellite','data'],['Cameras','data'],['Weather','data'],['Terrain / fuels','data']],
+    [['Ingest into ontology','model']],
+    [['Detect + track fire','model'],['Estimate fire state','model']],
+    [['Forecast spread (ensemble)','model']],
+    [['Assimilate live data','model']],
+    [['Calibrate probabilities','model']],
+    [['Estimate exposure','fire']],
+    [['Validate vs actual fire','out']],
+  ];
+  const rh=64; let y=8, svg='';
+  const centers=[];
+  rows.forEach((row,ri)=>{
+    const tw=row.length*bw+(row.length-1)*24, x0=(W-tw)/2, cy=y+bh/2;
+    row.forEach((b,ci)=>{const x=x0+ci*(bw+24);svg+=box(x,y,bw,bh,b[0],b[1]);});
+    centers.push([W/2,cy]); y+=rh;
+  });
+  let arr='';
+  for(let i=0;i<centers.length-1;i++) arr+=arrow(centers[i][0],centers[i][1]+bh/2,centers[i+1][0],centers[i+1][1]-bh/2);
+  return `<svg viewBox="0 0 ${W} ${y}" style="width:100%;max-width:${W}px">${defs}${arr}${svg}</svg>`;}
 
 function vO(){const d=FW.events[0];
   app.innerHTML=`<div class="page">
@@ -190,6 +258,7 @@ function vO(){const d=FW.events[0];
       ${vd(d.tracking,d.tracking_poster,'The satellite tracks the fire.')}
       ${vd(d.response,d.response_poster,'The model forecasts where it spreads and who is nearby.')}
     </div>
+    ${videoLegend}
     <p class="desc">The videos play slowly so you can read each step. The blue line at the bottom of each
     video names what the model is doing at that moment.</p>
   </div>`;}
@@ -212,15 +281,50 @@ function vF(){
   app.innerHTML=`<div class="page"><h1>Three real fires</h1>
     <p class="lede">Each is replayed from the first satellite detection over its first six hours. Under
     each pair of videos, the six stills show the fire and the model's read at that moment.</p>
+    ${videoLegend}
     <div class="grid" style="margin-top:22px">${cards}</div></div>`;}
 
-function vP(){const st=FW.pipeline.map((s,i)=>`<div class="stage">
-    <div class="fig">${s.figure?`<img src="${s.figure}" alt="${esc(s.title)}">`:''}</div>
-    <div><div class="n">Step ${i+1} of ${FW.pipeline.length}</div><h3>${esc(s.title)}</h3>
-      <div class="st">${esc(s.subtitle)}</div><p>${esc(s.desc)}</p></div></div>`).join('');
+function vP(){const st=FW.pipeline.map((s,i)=>`<div class="stagewrap">
+    <div class="stage">
+      <div class="fig">${s.figure?`<img src="${s.figure}" alt="${esc(s.title)}">`:''}</div>
+      <div><div class="n">Step ${i+1} of ${FW.pipeline.length}</div><h3>${esc(s.title)}</h3>
+        <div class="st">${esc(s.subtitle)}</div><p>${esc(s.desc)}</p></div></div>
+    <div class="wf">${(s.inputs&&s.inputs.length)?stepDiagram(s):''}</div>
+  </div>`).join('');
   app.innerHTML=`<div class="page"><h1>How it works</h1>
     <p class="lede">A walk through what the model does, from raw satellite data to a forecast you can
-    check. Every picture is made from real data.</p>${st}</div>`;}
+    check. Every picture is made from real data, and each step has a small workflow showing what goes
+    in and what comes out.</p>
+    <div class="h-sec">The model, end to end</div>
+    <div class="card" style="text-align:center">${overallDiagram()}</div>
+    <div class="h-sec">Each step in detail</div>${st}</div>`;}
+
+function vOps(){
+  const roles=[
+    ['Incident commanders','Decide evacuation timing and where to move crews under uncertainty. FIREWATCH gives a probabilistic view of where the fire will be in 30, 60 and 180 minutes, with a confidence band, instead of a single guess.'],
+    ['Emergency managers','See which communities and roads are in the fire\'s path and roughly when. Exposure is computed from real population and road data, so the picture matches the ground.'],
+    ['Dispatch and 911 centers','Turn scattered satellite alerts, camera feeds and weather into one shared, time-stamped picture that everyone is looking at, instead of a wall of separate screens.'],
+    ['GIS and intel analysts','Trace every number back to the observation that produced it. Nothing on the map is a black box; each layer is a real datum with a source and a timestamp.'],
+  ];
+  app.innerHTML=`<div class="page">
+    <h1>An operating picture for wildfire response.</h1>
+    <p class="lede">Wildfire response is a decision made under extreme time pressure with fragmented
+    information. The data to make the call, satellite hotspots, camera feeds, weather, terrain, fuels,
+    already exists and is mostly public, but it is scattered and not turned into a forward look.
+    FIREWATCH pulls it into one place, forecasts where the fire is going, and keeps a person in the loop.</p>
+    <div class="h-sec">Who it helps</div>
+    <div class="grid g2">${roles.map(r=>`<div class="card"><h3 style="margin:0 0 8px;font-size:18px">${r[0]}</h3>
+      <p style="margin:0;color:var(--text-2)">${r[1]}</p></div>`).join('')}</div>
+    <div class="h-sec">How it fits together, like an operating system</div>
+    <div class="card" style="text-align:center">${overallDiagram()}</div>
+    <p class="desc">Feeds come in at the bottom, become one shared model of the fire, and drive a
+    forecast and an exposure estimate at the top. Because every stage reads and writes the same shared
+    objects, you can rewind to any moment, see exactly what the system knew then, and check its forecast
+    against what actually happened.</p>
+    <div class="how" style="margin-top:26px"><h4>The one rule</h4>
+      <p style="margin:0;color:var(--text-2)">FIREWATCH recommends and informs. It never issues an
+      evacuation order on its own. A human always makes the decision.</p></div>
+  </div>`;}
 
 function vR(){const r=FW.results||{};
   const hs=FW.events[0].skill.map(s=>s.horizon_min);
@@ -241,9 +345,12 @@ function vR(){const r=FW.results||{};
     <div class="grid g2">
       ${g('growth','How big each fire grew over time, from the satellite.')}
       ${g('performance','How well the forecast matched the real fire: plain model vs model with live data.')}
+      ${g('improvement','How much feeding in live data improved the forecast, per fire.')}
+      ${g('brier','Forecast error over time, lower is better.')}
       ${g('detections','How many fire pixels the satellite saw, adding up over time.')}
       ${g('spread','How fast each fire moved, on average.')}
       ${g('coverage','How often the truth fell inside the model 90% region. The dashed line is the target.')}
+      ${g('extent','How large each fire got at its peak, in this window.')}
       ${g('calibration','Whether the model probabilities are honest, before and after calibration.')}
     </div></div>`;}
 
