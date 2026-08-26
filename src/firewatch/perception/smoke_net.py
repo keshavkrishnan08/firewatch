@@ -187,7 +187,7 @@ def train_smoke_net(n_train=600, n_val=120, epochs=12, batch=16, seed=0, log=pri
             loss = bce(logits, yb) + _soft_dice_loss(torch.sigmoid(logits), yb)
             loss.backward()
             opt.step()
-            tot += float(loss) * len(idx)
+            tot += float(loss.detach()) * len(idx)
         if (ep + 1) % 3 == 0 or ep == 0:
             iou = _val_iou(net, Xva, Yva, dev)
             log(f"  epoch {ep+1:>2}/{epochs}  loss {tot/n_train:.4f}  val_mask_IoU {iou:.3f}")

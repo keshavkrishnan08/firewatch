@@ -20,7 +20,8 @@ data/**
 !data/events/.gitkeep
 outputs/**
 !outputs/.gitkeep
-cache/                # osmnx / overpass request cache (created at runtime)
+# osmnx / overpass request cache (created at runtime)
+cache/
 .config/
 *.tif
 *.tiff
