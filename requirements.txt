@@ -55,3 +55,6 @@ ruff==0.16.4
 # --- ML (learned surrogate + real detection; optional heavy) ---
 scikit-learn==1.9.0
 torchvision==0.28.0
+# --- video encoding (historical time-lapses) ---
+imageio==2.37.4
+imageio-ffmpeg==0.6.0

@@ -137,6 +137,24 @@ That kind of honest failure analysis is a feature: it points squarely at the rem
 (finer VIIRS observations via a FIRMS key, better live fuel-moisture). This is what credible looks like
 on real data.
 
+### Historical fire tracking — real satellite object tracking (`make history`)
+
+Not synthetic: for three named historical wildfires, FIREWATCH pulls the **real GOES-18 active-fire
+time-series**, clusters the detections into fire objects and **tracks them over time** (DBSCAN + 
+nearest-centroid association — the core of multi-object tracking), and fuses that with the assimilating
+forecast over real terrain (Terrain Tiles), fuels (ESA WorldCover) and wind (HRRR). Every visualization
+below is a real tracking run — the fire growing, its tracked centroid path, spread rate and heading:
+
+| 🔥 Park Fire (Jul 2024) | 🔥 Palisades Fire (Jan 2025) | 🔥 Eaton Fire (Jan 2025) |
+|---|---|---|
+| ![park](docs/assets/track_park.png) | ![palisades](docs/assets/track_palisades.png) | ![eaton](docs/assets/track_eaton.png) |
+
+All three play as **sped-up time-lapse videos** (the fire growing, its tracked centroid path, the
+forecast appearing at issue time) in a light editorial page — [`docs/history.html`](docs/history.html)
+(`make history` regenerates page + videos from the runs). On all three, assimilation beats the
+no-assimilation baseline (mean perimeter IoU): Park **0.155 → 0.179**, Palisades **0.193 → 0.198**,
+Eaton **0.150 → 0.161** — consistent, honest, real-data gains.
+
 ### Learned models (`make train`)
 
 Two **real trained torch models** (MPS/CUDA/CPU), by self-distillation — no external download:

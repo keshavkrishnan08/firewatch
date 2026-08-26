@@ -71,6 +71,16 @@ RETRO_REGISTRY: dict[str, RetroConfig] = {
         start_utc="2024-07-24T22:00:00Z", window_min=360, assim_min=180,
         horizons=[210, 240, 300, 360], cell_m=300.0, half_extent_m=26000.0, goes_steps=16, members=40,
     ),
+    "palisades": RetroConfig(
+        key="palisades", name="Palisades Fire (2025)", center_lon=-118.55, center_lat=34.08,
+        start_utc="2025-01-07T18:30:00Z", window_min=360, assim_min=180,
+        horizons=[210, 240, 300, 360], cell_m=250.0, half_extent_m=16000.0, goes_steps=16, members=40,
+    ),
+    "eaton": RetroConfig(
+        key="eaton", name="Eaton Fire (2025)", center_lon=-118.13, center_lat=34.19,
+        start_utc="2025-01-08T02:30:00Z", window_min=360, assim_min=180,
+        horizons=[210, 240, 300, 360], cell_m=250.0, half_extent_m=14000.0, goes_steps=16, members=40,
+    ),
 }
 
 
