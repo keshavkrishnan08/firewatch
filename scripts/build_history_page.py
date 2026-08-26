@@ -43,8 +43,8 @@ def build(out_path: Path) -> Path:
         sys.exit("no historical results with figures found — run firewatch.historical.run_all first")
 
     tot_det = sum(d["goes_detections"] for d in data)
-    tot_frames = sum(d["n_frames"] for d in data)
     mean_ros = sum(d["mean_ros_kmh"] for d in data) / len(data)
+    tot_pop = sum(d.get("residents_at_risk", 0) for d in data)
 
     asset_dir = REPO / "docs" / "assets"
 
@@ -72,11 +72,14 @@ def build(out_path: Path) -> Path:
         rr = d.get("responses", [])[:5]
         rows = "".join(
             f'<li><span class="rz">{r["zone"]}</span>'
-            f'<span class="rv">{"imminent" if r["lead_min"] < 1 else str(r["lead_min"]) + " min"} · {r["confidence"] * 100:.0f}%</span></li>'
+            f'<span class="rv">{"imminent" if r["lead_min"] < 1 else str(r["lead_min"]) + " min"} · '
+            f'{r["confidence"] * 100:.0f}%{" · " + format(r["residents"], ",") + " res." if r.get("residents") else ""}</span></li>'
             for r in rr)
         nfl = d.get("n_flagged", 0)
+        pop = d.get("residents_at_risk", 0)
+        pop_lbl = f" · ~{pop / 1000:.0f}K residents at risk" if pop >= 1000 else (f" · ~{pop} residents at risk" if pop else "")
         responses_html = (f'<div class="responses"><span class="skill-label">Evacuation responses issued'
-                          f' · {nfl} communit{"y" if nfl == 1 else "ies"}</span><ul>{rows}</ul></div>') if rr else ""
+                          f' · {nfl} communit{"y" if nfl == 1 else "ies"}{pop_lbl}</span><ul>{rows}</ul></div>') if rr else ""
         modules.append(f"""
       <article class="module reveal">
         <div class="scope-wrap"><div class="scopes">{track}{resp}</div></div>
@@ -235,13 +238,13 @@ footer code{{font-family:"IBM Plex Mono";color:var(--muted)}}
   <p class="lede">Real <b>GOES-18</b> active-fire detections, clustered into fire objects and
   <b>tracked over time</b>, then fused with a physics + data-assimilation spread forecast over real
   terrain and fuels. Each fire plays as two time-lapses — the <b>satellite tracking</b> and the
-  <b>decision response</b> that flags exposed communities with lead-time and confidence.
-  <span class="ns">Nothing synthetic.</span></p>
+  <b>decision response</b> that flags exposed communities with lead-time, confidence, and
+  <b>residents at risk</b>. <span class="ns">Nothing synthetic.</span></p>
   <div class="ribbon">
     <div class="stat"><div class="k">Fires tracked</div><div class="v">{len(data)}</div></div>
     <div class="stat"><div class="k">GOES detections</div><div class="v">{tot_det}<span>px</span></div></div>
-    <div class="stat"><div class="k">Frames processed</div><div class="v">{tot_frames}</div></div>
     <div class="stat"><div class="k">Mean spread rate</div><div class="v">{mean_ros:.1f}<span>km/h</span></div></div>
+    <div class="stat"><div class="k">Residents flagged</div><div class="v">{tot_pop / 1000:.0f}<span>K at risk</span></div></div>
   </div>
 </div></header>
 
