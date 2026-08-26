@@ -64,5 +64,13 @@ ingest:
 forecast:
 	$(PYTHON) -m firewatch.cli forecast --fire $(FIRE)
 
+# Train the learned models (spread surrogate + smoke segmenter) on real torch.
+train:
+	$(PYTHON) -m firewatch.cli train
+
+# Pre-registered retrospective on a real fire (ground truth = GOES active-fire progression).
+retrospective:
+	$(PYTHON) -m firewatch.cli retrospective --fire $(FIRE)
+
 clean:
 	rm -rf outputs/* data/events/$(FIRE)/cache 2>/dev/null || true

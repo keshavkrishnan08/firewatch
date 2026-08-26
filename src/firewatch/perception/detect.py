@@ -68,9 +68,10 @@ def flame_likelihood(image_bgr: np.ndarray) -> np.ndarray:
 class SmokeDetector:
     """YOLO/RT-DETR if available, else the classical fallback."""
 
-    def __init__(self, weights: str | None = None):
+    def __init__(self, weights: str | None = None, use_smoke_net: bool = True):
         self.backend = "classical"
         self.model = None
+        self.smoke_net = None
         if weights:
             try:
                 from ultralytics import YOLO
@@ -78,12 +79,44 @@ class SmokeDetector:
                 self.model = YOLO(weights)
                 self.backend = "yolo"
             except Exception:
-                self.model = None  # fall back silently; backend stays "classical"
+                self.model = None  # fall back silently
+        if self.model is None and use_smoke_net:
+            try:
+                from firewatch.perception.smoke_net import load_if_available
+
+                self.smoke_net = load_if_available()
+                if self.smoke_net is not None:
+                    self.backend = "smoke_net (torch)"
+            except Exception:
+                self.smoke_net = None
 
     def detect(self, image_bgr: np.ndarray, thresh: float = 0.45) -> list[Detection]:
         if self.model is not None:
             return self._detect_yolo(image_bgr, thresh)
+        if self.smoke_net is not None:
+            return self._detect_smoke_net(image_bgr, thresh)
         return self._detect_classical(image_bgr, thresh)
+
+    def _detect_smoke_net(self, image_bgr: np.ndarray, thresh: float) -> list[Detection]:
+        """Learned U-Net smoke mask -> connected-component boxes; flame stays classical."""
+        mask = self.smoke_net.segment(image_bgr, thresh=0.5)
+        out: list[Detection] = []
+        m = mask.astype(np.uint8)
+        if _HAS_CV2 and m.any():
+            n, lbl, stats, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+            comps = range(1, n)
+        else:
+            comps, lbl, stats = _cc_numpy(m)
+        h, w = mask.shape
+        for c in comps:
+            x, y, bw, bh, area = stats[c][0], stats[c][1], stats[c][2], stats[c][3], stats[c][4]
+            if area < 0.001 * h * w:
+                continue
+            out.append(Detection((int(x), int(y), int(x + bw), int(y + bh)),
+                                  float(min(1.0, area / (0.05 * h * w))), "smoke", "smoke_net"))
+        out += [d for d in self._detect_classical(image_bgr, thresh) if d.label == "flame"]
+        out.sort(key=lambda d: d.score, reverse=True)
+        return out
 
     def _detect_yolo(self, image_bgr: np.ndarray, thresh: float) -> list[Detection]:  # pragma: no cover
         out: list[Detection] = []

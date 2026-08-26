@@ -78,8 +78,13 @@ class Ensemble:
 
     # ── running ─────────────────────────────────────────────────────────────────
 
-    def run(self) -> Ensemble:
+    def run(self, surrogate=None) -> Ensemble:
+        """Solve each member's arrival field. If a learned `surrogate` is given, use it (fast prior)
+        instead of the physical MTT solver — the assimilation/calibration loop is unchanged."""
         for m in self.members:
+            if surrogate is not None and self.initial_mask is None:
+                m.arrival = surrogate.predict_arrival(self.grid, m.ignition_lonlat, m.params)
+                continue
             if self.initial_mask is not None:
                 ign = self.initial_mask  # forecast forward from the current observed perimeter
             else:
