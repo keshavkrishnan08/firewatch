@@ -119,8 +119,7 @@ def train_surrogate(n_train=400, n_val=60, epochs=30, batch=8, seed=0, log=print
 
     dev = _device()
     net = _build_model().to(dev)
-    opt = torch.optim.Adam(net.parameters(), lr=1e-3)
-    lossf = torch.nn.MSELoss()
+    opt = torch.optim.Adam(net.parameters(), lr=1.5e-3)
     t0 = time.time()
     for ep in range(epochs):
         net.train()
@@ -130,37 +129,61 @@ def train_surrogate(n_train=400, n_val=60, epochs=30, batch=8, seed=0, log=print
             idx = perm[i:i + batch]
             xb, yb = Xtr[idx].to(dev), Ytr[idx].to(dev)
             opt.zero_grad()
-            loss = lossf(net(xb), yb)
+            # weight reached cells (arrival < horizon) far more than the trivial unreached tail
+            w = 1.0 + 8.0 * (yb < 0.99).float()
+            loss = (w * (net(xb) - yb) ** 2).mean()
             loss.backward()
             opt.step()
             tot += float(loss.detach()) * len(idx)
         if (ep + 1) % 5 == 0 or ep == 0:
-            net.eval()
-            with torch.no_grad():
-                vpred = net(Xva.to(dev)).cpu()
-            vmae_min = float((vpred - Yva).abs().mean()) * T_SCALE
-            log(f"  epoch {ep+1:>2}/{epochs}  train_mse {tot/n_train:.4f}  val_MAE {vmae_min:.1f} min")
+            rmae = _reached_mae(net, Xva, Yva, dev)
+            log(f"  epoch {ep+1:>2}/{epochs}  train_loss {tot/n_train:.4f}  reached_MAE {rmae:.1f} min")
     train_s = time.time() - t0
 
-    # final metrics + speed comparison vs the physical solver
+    # meaningful metrics: MAE on cells the fire actually reached, + +60-min perimeter IoU
     net.eval()
     with torch.no_grad():
         vpred = net(Xva.to(dev)).cpu().numpy()
     vtrue = Yva.numpy()
-    mae_min = float(np.abs(vpred - vtrue).mean() * T_SCALE)
-    # speed: surrogate forward vs MTT solve on one grid
-    g = synthetic_grid(38.5, -122.6, cell_m=200.0, n=96)
-    ig = g.cell_to_lonlat(48, 48)
+    reached = vtrue < 0.99
+    reached_mae = float(np.abs(vpred[reached] - vtrue[reached]).mean() * T_SCALE) if reached.any() else float("nan")
+    h60 = 60.0 / T_SCALE
+    iou60 = _mask_iou(vpred < h60, vtrue < h60)
     model = SurrogateModel(net=net, device=dev)
+
+    # honest speed: the real use is one BATCHED forward for the whole ensemble vs N MTT solves
+    N, n = 48, 160
+    g = synthetic_grid(38.5, -122.6, cell_m=200.0, n=n, wind_speed_ms=9, wind_dir_to_deg=60)
+    igs = [g.cell_to_lonlat(n // 2 + int(d), n // 2) for d in np.linspace(-6, 6, N)]
+    ps = [SpreadParams(wind_mult=float(w)) for w in np.linspace(0.7, 1.4, N)]
     t = time.time()
-    for _ in range(5):
-        model.predict_arrival(g, ig)
-    t_sur = (time.time() - t) / 5
+    for ig, p in zip(igs, ps, strict=False):
+        solve_arrival_times(g, g.ignition_mask(ig, 200), p)
+    t_mtt = time.time() - t
     t = time.time()
-    for _ in range(5):
-        solve_arrival_times(g, g.ignition_mask(ig, 200), SpreadParams())
-    t_mtt = (time.time() - t) / 5
-    metrics = {"val_mae_min": mae_min, "train_seconds": train_s, "device": str(dev),
+    Xb = torch.from_numpy(np.stack([input_channels(g, ig, p) for ig, p in zip(igs, ps, strict=False)]))
+    with torch.no_grad():
+        net(Xb.to(dev)).cpu().numpy()
+    t_sur = time.time() - t
+    metrics = {"val_mae_min": reached_mae, "reached_mae_min": reached_mae, "perimeter_iou_60": iou60,
+               "train_seconds": train_s, "device": str(dev), "ensemble_n": N, "grid_n": n,
                "surrogate_ms": t_sur * 1000, "mtt_ms": t_mtt * 1000, "speedup": t_mtt / max(t_sur, 1e-6),
                "n_train": n_train, "epochs": epochs}
     return model, metrics
+
+
+def _reached_mae(net, X, Y, dev) -> float:
+    import torch
+
+    net.eval()
+    with torch.no_grad():
+        p = net(X.to(dev)).cpu().numpy()
+    y = Y.numpy()
+    reached = y < 0.99
+    return float(np.abs(p[reached] - y[reached]).mean() * T_SCALE) if reached.any() else float("nan")
+
+
+def _mask_iou(a, b) -> float:
+    inter = (a & b).sum()
+    union = (a | b).sum()
+    return float(inter / union) if union > 0 else 1.0
