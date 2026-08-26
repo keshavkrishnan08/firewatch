@@ -133,7 +133,7 @@ def train_surrogate(n_train=400, n_val=60, epochs=30, batch=8, seed=0, log=print
             loss = lossf(net(xb), yb)
             loss.backward()
             opt.step()
-            tot += float(loss) * len(idx)
+            tot += float(loss.detach()) * len(idx)
         if (ep + 1) % 5 == 0 or ep == 0:
             net.eval()
             with torch.no_grad():

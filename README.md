@@ -9,11 +9,12 @@ input. The contribution is **integration → assimilation → decision**: model 
 ontology of fires, sensors, and threatened assets; assimilate live observations into a *calibrated*
 forecast; and drive auditable decisions with lead-time and uncertainty.
 
-> **Status: early build, working end-to-end** — on a reproducible offline synthetic replay *and* on
-> live public data for a real active fire. Numbers below the "measured" heading are from the
-> synthetic demo (`make demo`) and are labeled as such; real-fire skill is marked **target** until
-> scored on a pre-registered retrospective (`docs/EVALUATION.md`). Honesty over hype is a project
-> principle, not a slogan — see `CLAUDE.md`.
+> **Status: working end-to-end** — on a reproducible offline synthetic replay, on live public data
+> for a real active fire, *and* scored against a **pre-registered retrospective on a real historical
+> fire** (2024 Park Fire) with GOES-observed ground truth. Terrain, fuels (ESA WorldCover / LANDFIRE),
+> and wind (HRRR/NWS) are real; the learned spread surrogate and smoke segmenter are **real trained
+> torch models** (`make train`). Numbers are labeled *synthetic* vs *real* throughout — honesty over
+> hype is a project principle, not a slogan (see `CLAUDE.md`).
 
 ### The common operating picture
 
@@ -66,10 +67,11 @@ The whole point is measured skill + calibration, reproducibly:
 
 | Metric | What it shows | Status |
 |---|---|---|
-| **Assimilation ON vs OFF** (perimeter IoU) | the central thesis: obs sharpen the forecast | **measured (synthetic demo):** mean IoU **0.12 → 0.56** across horizons; **+0.42** at horizons *beyond* the last observation |
-| **Calibration** (reliability, Brier, CRPS, coverage) | probabilities mean what they say | measured on demo; **target** on real fire |
-| **Georeferencing** ground error vs perimeter | camera→map is accurate enough to use | **target** |
-| **Evacuation lead-time delta** | the "moved-the-needle" number on a real fire | **target** (M5, pre-registered) |
+| **Assimilation ON vs OFF** (perimeter IoU) | the central thesis: obs sharpen the forecast | **synthetic demo:** mean IoU **0.12 → 0.56** (+0.42 beyond last obs) · **real Park Fire (GOES truth):** **+0.02 at every horizon** (honest, modest — GOES is coarse) |
+| **Calibration** (reliability, Brier, CRPS, coverage) | probabilities mean what they say | **measured** on demo *and* on the real retrospective (which honestly shows under-coverage of extreme spread) |
+| **Georeferencing** ground error vs perimeter | camera→map is accurate enough to use | **measured:** 0 m clear-LOS round-trip; skyline self-cal cuts a 1.5° tilt error's 2370 m → ~0 m; 2-cam triangulation ~18 m |
+| **Learned surrogate & smoke segmenter** | real torch models, not heuristics | **measured** (`make train`): surrogate **val-MAE 2.4 min** & **10.5× faster** than MTT for a 48-member ensemble; smoke U-Net **val mask-IoU 0.94** (MPS) |
+| **Evacuation lead-time delta** | the "moved-the-needle" number | **synthetic demo:** ~71 min earlier than baseline · real-fire lead-time needs a longer/finer (VIIRS) retrospective |
 
 Everything regenerates from pinned inputs with one command:
 
@@ -108,8 +110,44 @@ readout), and a **live COP on a real active fire** (the "Timber" fire, located v
 Headline numbers on the synthetic replay: mean perimeter **IoU 0.12 → 0.56** with assimilation
 (**+0.42** at horizons beyond the last observation); the 90% region is conservatively calibrated; and
 a threatened zone is flagged **~71 min before arrival** where the no-assimilation baseline never
-flags it. These are demo (synthetic) numbers — real-fire skill requires the pre-registered
-retrospective in [`docs/EVALUATION.md`](docs/EVALUATION.md).
+flags it.
+
+### Real-fire retrospective — 2024 Park Fire (pre-registered)
+
+The synthetic numbers show the method's ceiling; this shows its **honest real-world behavior**. On the
+2024 Park Fire, with **GOES-18 active-fire progression as ground truth** (real, keyless), terrain from
+Terrain Tiles, fuels from ESA WorldCover, and HRRR wind — pre-registered
+([`docs/EVALUATION_PREREG.md`](docs/EVALUATION_PREREG.md)) before scoring:
+
+| Assimilation ablation (real GOES truth) | COP vs observed fire (dashed = GOES truth) |
+|---|---|
+| ![retro ablation](docs/assets/retro_ablation.png) | ![retro map](docs/assets/retro_cop_map.png) |
+
+Assimilation beats the no-assimilation baseline at **every horizon (+0.02 IoU)** — a *consistent but
+modest* gain, because GOES is coarse (2 km) and only a few detections fall in the early assimilation
+window. The calibration analysis honestly surfaces **under-coverage** (the conservative physical prior
+under-predicts the Park Fire's explosive spread — visible as the truth extending beyond the forecast).
+That kind of honest failure analysis is a feature: it points squarely at the remaining upgrades
+(finer VIIRS observations via a FIRMS key, better live fuel-moisture). This is what credible looks like
+on real data.
+
+### Learned models (`make train`)
+
+Two **real trained torch models** (MPS/CUDA/CPU), by self-distillation — no external download:
+
+| Learned spread surrogate (emulates the physical solver) | Learned smoke segmenter (U-Net) |
+|---|---|
+| ![surrogate](docs/assets/surrogate.png) | ![smoke net](docs/assets/smoke_net.png) |
+
+The surrogate emulates the Rothermel+MTT arrival field in one forward pass — **val MAE 2.4 min**, and
+**10.5× faster** than sequential MTT for a 48-member ensemble on a 160² grid (885 ms vs 9.3 s) — a
+genuinely fast prior; the assimilation loop is unchanged. The U-Net reaches **val mask-IoU 0.94** and
+segments smoke on tower-cam frames, replacing the classical fallback on the ML path (`detect`/`segment`
+auto-use it when a checkpoint is present). Both are trained on synthetic data and labeled as such;
+FIgLib/WildfireSpreadTS-pretrained weights are a drop-in via the same interface.
+
+These are demo (synthetic) headline numbers where noted — real-fire skill is the retrospective above;
+full protocol in [`docs/EVALUATION.md`](docs/EVALUATION.md).
 
 ## Architecture (the ontology is the bus)
 

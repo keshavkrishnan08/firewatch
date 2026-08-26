@@ -59,3 +59,4 @@ ignore = ["E501"]  # line length handled by formatter; long strings/URLs tolerat
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = ["slow: longer-running tests (model training, large grids)"]
