@@ -211,7 +211,7 @@ def _captions(cfg, track, delta):
         if delta is not None else f"{cfg.name}: tracked to {peak:.0f} km²")
 
 
-def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 4, px: int = 600) -> str:
+def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 2, px: int = 600) -> str:
     """Cinematic sped-up time-lapse with narrated subtitles (mp4, loopable scope)."""
     import matplotlib
     matplotlib.use("Agg")
@@ -369,7 +369,7 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 4, 
     return str(out)
 
 
-def response_video(bundle, on, cfg, fps: int = 4, px: int = 600, threshold: float = 0.25,
+def response_video(bundle, on, cfg, fps: int = 2, px: int = 600, threshold: float = 0.25,
                    threat_km: float = 4.0) -> tuple[str, list]:
     """Decision-response time-lapse: the forecast spreads, communities light up as they're flagged for
     evacuation, egress routes at risk turn red, with the lead-time / confidence VALUES narrated."""
