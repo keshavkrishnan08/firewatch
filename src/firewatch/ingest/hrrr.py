@@ -49,20 +49,23 @@ def fetch_wind_nws(lat: float, lon: float) -> dict | None:
 
 @soft
 def fetch_wind_hrrr(lat: float, lon: float, t: datetime) -> dict | None:  # pragma: no cover - heavy/optional
-    """NOAA HRRR 10-m wind via Herbie (optional heavy path)."""
-    try:
-        from herbie import Herbie
-    except Exception:
-        return None
+    """NOAA HRRR 10-m wind at the nearest gridpoint via Herbie (historical wind for retrospectives)."""
+    import numpy as np
+    from herbie import Herbie
+
     H = Herbie(t.strftime("%Y-%m-%d %H:00"), model="hrrr", product="sfc", fxx=0)
     ds = H.xarray(":[UV]GRD:10 m above ground:", remove_grib=True)
-    import numpy as np
-
     da = ds if not isinstance(ds, list) else ds[0]
-    # nearest-point extraction is model-grid specific; keep this best-effort (domain mean)
-    u = float(np.asarray(da["u10"]).mean())
-    v = float(np.asarray(da["v10"]).mean())
-    return {"wind_u": u, "wind_v": v, "speed_ms": math.hypot(u, v), "source": "NOAA HRRR (Herbie)"}
+    lats = np.asarray(da["latitude"])
+    lons = np.asarray(da["longitude"])
+    lons = np.where(lons > 180, lons - 360, lons)  # HRRR uses 0-360
+    i, j = np.unravel_index(np.argmin((lats - lat) ** 2 + (lons - lon) ** 2), lats.shape)
+    u = float(np.asarray(da["u10"])[i, j])
+    v = float(np.asarray(da["v10"])[i, j])
+    rh = float(np.asarray(da["r2"])[i, j]) if "r2" in da else None
+    return {"wind_u": u, "wind_v": v, "speed_ms": math.hypot(u, v), "rh_pct": rh,
+            "dir_from_deg": (math.degrees(math.atan2(-u, -v)) + 360) % 360,
+            "source": f"NOAA HRRR {t:%Y-%m-%d %HZ} (Herbie)"}
 
 
 def fetch_wind(lat: float, lon: float, t: datetime | None = None, event_id: str = "event") -> dict:
