@@ -1,12 +1,11 @@
-"""Build the FIREWATCH site — a self-contained, dark research instrument with four tabs:
-Overview (demo video + what it does), Fires (annotated time-lapses + descriptions), Pipeline
-(a figure + academic description per stage), Results (custom research graphs).
-
-Reads outputs/historical.json + outputs/showcase.json; embeds all media as data URIs (each video
-embedded once and referenced by key to keep the file small)."""
+"""Build the FIREWATCH site: a self-contained dark research tool with four tabs (Overview, Fires,
+Pipeline, Results). Reads outputs/historical.json + outputs/showcase.json. Videos are embedded as
+MP4; still images are downscaled to compact JPEG so the page can carry many of them.
+"""
 from __future__ import annotations
 
 import base64
+import io
 import json
 import sys
 from pathlib import Path
@@ -15,60 +14,67 @@ REPO = Path(__file__).resolve().parents[1]
 ASSETS = REPO / "docs" / "assets"
 
 META = {
-    "park": {"region": "Tehama & Butte Counties, CA", "when": "24 Jul 2024"},
+    "park": {"region": "Tehama & Butte Counties, California", "when": "24 Jul 2024"},
     "palisades": {"region": "Pacific Palisades, Los Angeles", "when": "07 Jan 2025"},
-    "eaton": {"region": "Altadena / Eaton Canyon, CA", "when": "07 Jan 2025"},
+    "eaton": {"region": "Altadena / Eaton Canyon, California", "when": "07 Jan 2025"},
 }
-TRACK_DESC = ("Real GOES-18 active-fire pixels are clustered into a fire object and tracked over time. "
-              "The cyan path is the tracked centroid; the orange outline is the observed burn footprint; "
-              "the blue MODEL line names the pipeline stage running at each moment. After the forecast is "
-              "issued, the dashed outline is the projected perimeter.")
-RESP_DESC = ("The forecast is projected forward from the fire's observed perimeter; the shaded field is the "
-             "ensemble burn probability (yellow → red). Communities light up as the forecast crosses a "
-             "threat threshold near them, annotated with the OpenStreetMap resident count and the ensemble "
-             "threat probability. This is exposure analysis — not an operational evacuation order.")
+TRACK_DESC = ("The satellite watches the fire. Orange is the fire the satellite actually sees; cyan is "
+              "the path the model tracks as it follows the fire; the blue line at the bottom says which "
+              "step the model is running. Once the model issues a forecast, the dashed outline is where "
+              "it thinks the fire will go.")
+RESP_DESC = ("The model projects the fire forward. The shaded area is how likely each place is to burn "
+             "(yellow is lower, red is higher). Towns turn red when the forecast reaches them, with the "
+             "number of residents nearby. This is an estimate of who is exposed, not an evacuation order.")
 
 
-def b64(p: Path, mime: str) -> str:
-    return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode()
+def vid(p: Path) -> str:
+    return "data:video/mp4;base64," + base64.b64encode(p.read_bytes()).decode()
+
+
+def img(p: Path, maxw: int = 720, q: int = 82) -> str:
+    """Downscale to a compact JPEG data URI so the page can carry many images."""
+    try:
+        from PIL import Image
+        im = Image.open(p).convert("RGB")
+        if im.width > maxw:
+            im = im.resize((maxw, round(im.height * maxw / im.width)), Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=q)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return "data:image/png;base64," + base64.b64encode(p.read_bytes()).decode()
 
 
 def build(out_path: Path) -> Path:
     data = json.loads((REPO / "outputs" / "historical.json").read_text())
     data = [d for d in data if (ASSETS / (d.get("video_asset") or "x")).exists()]
     if not data:
-        sys.exit("no historical results — run firewatch.historical.run_all first")
-    show = {}
+        sys.exit("no historical results")
     sp = REPO / "outputs" / "showcase.json"
-    if sp.exists():
-        show = json.loads(sp.read_text())
+    show = json.loads(sp.read_text()) if sp.exists() else {}
 
     events = []
     for d in data:
         m = META.get(d["key"], {"region": "", "when": ""})
+        evo = [{"img": img(ASSETS / e["asset"], 460), "t": e["t_min"], "cap": e["caption"]}
+               for e in d.get("evolution", []) if (ASSETS / e["asset"]).exists()]
         events.append({
             "key": d["key"], "name": d["name"].split(" (")[0], "full": d["name"],
             "region": m["region"], "when": m["when"], "center": d.get("center", [None, None]),
-            "area": round(d["peak_area_km2"]), "detections": d["goes_detections"], "passes": d["n_frames"],
-            "heading_deg": round(d["heading_deg"]), "ros": d["mean_ros_kmh"],
-            "iou_on": d["iou_on"], "iou_off": d["iou_off"], "delta": d["ablation_delta_iou"],
-            "skill": d.get("skill_by_horizon", []),
-            "exposure": {"n": d.get("n_flagged", 0), "residents": d.get("residents_at_risk", 0)},
-            "tracking": b64(ASSETS / d["video_asset"], "video/mp4"),
-            "tracking_poster": b64(ASSETS / f"poster_{d['key']}.png", "image/png") if (ASSETS / f"poster_{d['key']}.png").exists() else "",
-            "response": b64(ASSETS / d["response_asset"], "video/mp4") if d.get("response_asset") and (ASSETS / d["response_asset"]).exists() else "",
-            "response_poster": b64(ASSETS / f"response_poster_{d['key']}.png", "image/png") if (ASSETS / f"response_poster_{d['key']}.png").exists() else "",
+            "area": round(d["peak_area_km2"]), "detections": d["goes_detections"],
+            "ros": d["mean_ros_kmh"], "iou_on": d["iou_on"], "iou_off": d["iou_off"],
+            "delta": d["ablation_delta_iou"], "skill": d.get("skill_by_horizon", []),
+            "tracking": vid(ASSETS / d["video_asset"]),
+            "tracking_poster": img(ASSETS / f"poster_{d['key']}.png", 600) if (ASSETS / f"poster_{d['key']}.png").exists() else "",
+            "response": vid(ASSETS / d["response_asset"]) if d.get("response_asset") and (ASSETS / d["response_asset"]).exists() else "",
+            "response_poster": img(ASSETS / f"response_poster_{d['key']}.png", 600) if (ASSETS / f"response_poster_{d['key']}.png").exists() else "",
+            "evolution": evo,
         })
 
-    pipeline = []
-    for s in show.get("pipeline", []):
-        fig = s.get("figure")
-        pipeline.append({"title": s["title"], "subtitle": s["subtitle"], "desc": s["desc"],
-                         "figure": b64(ASSETS / fig, "image/png") if fig and (ASSETS / fig).exists() else ""})
-    results = {}
-    for k, fn in (show.get("results") or {}).items():
-        if fn and (ASSETS / fn).exists():
-            results[k] = b64(ASSETS / fn, "image/png")
+    pipeline = [{"title": s["title"], "subtitle": s["subtitle"], "desc": s["desc"],
+                 "figure": img(ASSETS / s["figure"], 760) if s.get("figure") and (ASSETS / s["figure"]).exists() else ""}
+                for s in show.get("pipeline", [])]
+    results = {k: img(ASSETS / fn, 900) for k, fn in (show.get("results") or {}).items() if fn and (ASSETS / fn).exists()}
 
     model = {"events": events, "pipeline": pipeline, "results": results,
              "track_desc": TRACK_DESC, "resp_desc": RESP_DESC}
@@ -81,176 +87,165 @@ def build(out_path: Path) -> Path:
 TEMPLATE = r"""<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FIREWATCH</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-:root{--bg:#0b0d0f;--surface:#11151a;--surface-2:#0e1216;--border:#242a31;--border-2:#2f3740;
-  --text:#e7eaed;--text-2:#8a939e;--text-3:#5c656f;--blue:#4c9aff;--fire:#ff6848;--fire-2:#f2b84b;
-  --mono:"IBM Plex Mono",ui-monospace,monospace}
+:root{--bg:#0b0d0f;--surface:#12161b;--surface-2:#0e1216;--border:#242a31;--border-2:#2f3740;
+  --text:#e7eaed;--text-2:#9aa3ad;--text-3:#69707a;--blue:#4c9aff;--fire:#ff6848;--fire-2:#f2b84b;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","SFMono-Regular",Menlo,monospace}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-body{margin:0;background:var(--bg);color:var(--text);font-family:"Inter",system-ui,sans-serif;font-size:14px;
-  line-height:1.6;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;
+  line-height:1.6;-webkit-font-smoothing:antialiased;letter-spacing:-.01em}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
-.nav{display:flex;align-items:center;gap:26px;height:50px;padding:0 24px;border-bottom:1px solid var(--border);
-  position:sticky;top:0;background:var(--bg);z-index:40}
-.brand{font-weight:700;letter-spacing:.14em;font-size:14px}.brand b{color:var(--fire)}
+.nav{display:flex;align-items:center;gap:22px;height:52px;padding:0 24px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:rgba(11,13,15,.9);backdrop-filter:blur(8px);z-index:40}
+.brand{font-weight:600;letter-spacing:.02em;font-size:16px}.brand b{color:var(--fire)}
 .tabs{display:flex;gap:2px}
-.tab{background:none;border:0;border-bottom:1px solid transparent;color:var(--text-2);font-family:inherit;
-  font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;padding:16px 14px;margin-bottom:-1px;cursor:pointer}
+.tab{background:none;border:0;border-bottom:2px solid transparent;color:var(--text-2);font-family:inherit;
+  font-size:14px;padding:16px 12px;margin-bottom:-1px;cursor:pointer;font-weight:500}
 .tab.on{color:var(--text);border-color:var(--blue)}
-.sys{margin-left:auto;display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:11px;color:var(--text-2)}
-.sys .dot{width:6px;height:6px;border-radius:50%;background:var(--blue);box-shadow:0 0 6px var(--blue)}
-.page{max-width:1140px;margin:0 auto;padding:30px 24px 80px}
-h1{font-size:30px;font-weight:700;letter-spacing:.01em;margin:0 0 10px}
-h1 b{color:var(--fire)}
-.lede{color:var(--text-2);font-size:16px;max-width:70ch;margin:0}
-.h-sec{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--text-3);text-transform:uppercase;
-  margin:34px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
-.scope{width:100%;display:block;border:1px solid var(--border);border-radius:4px;background:#05070d;object-fit:cover}
-.vwrap{position:relative}
-.vlbl{position:absolute;left:12px;top:12px;font-family:var(--mono);font-size:10px;color:#dfe8f2;
-  background:rgba(5,7,13,.62);border:1px solid var(--border-2);padding:3px 8px;border-radius:3px}
-.desc{color:var(--text-2);font-size:14px;margin:12px 0 0;max-width:78ch}
+.sys{margin-left:auto;display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+.sys .dot{width:6px;height:6px;border-radius:50%;background:var(--blue)}
+.page{max-width:1080px;margin:0 auto;padding:34px 24px 90px}
+h1{font-size:32px;font-weight:600;letter-spacing:-.02em;margin:0 0 12px;line-height:1.15}
+h1 b{color:var(--fire);font-weight:600}
+.lede{color:var(--text-2);font-size:17px;max-width:64ch;margin:0}.lede b{color:var(--text);font-weight:600}
+.how{border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:18px 20px;margin:22px 0}
+.how h4{margin:0 0 10px;font-size:12px;color:var(--text-3);font-weight:600;letter-spacing:.03em;text-transform:uppercase}
+.how ul{margin:0;padding-left:18px;color:var(--text-2)}.how li{margin:5px 0}.how b{color:var(--text)}
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;font-size:13.5px;color:var(--text-2)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:6px}
+.h-sec{font-size:12px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.05em;
+  margin:36px 0 16px;padding-bottom:9px;border-bottom:1px solid var(--border)}
+.scope{width:100%;display:block;border:1px solid var(--border);border-radius:8px;background:#05070d;object-fit:cover}
 .grid{display:grid;gap:22px}.g2{grid-template-columns:1fr 1fr}
-.card{border:1px solid var(--border);background:var(--surface);border-radius:4px;padding:18px}
-.chead{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}
-.chead h2{font-size:19px;font-weight:600;margin:0}
-.chead .sub{font-family:var(--mono);font-size:11.5px;color:var(--text-2)}
-.tagrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
-.pill{font-family:var(--mono);font-size:10.5px;padding:3px 9px;border:1px solid var(--border-2);color:var(--text-2);border-radius:100px}
-.stage{display:grid;grid-template-columns:1fr 1.1fr;gap:26px;align-items:center;padding:26px 0;border-bottom:1px solid var(--border)}
-.stage:nth-child(even){grid-template-columns:1.1fr 1fr}
+.card{border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:20px}
+.chead{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.chead h2{font-size:21px;font-weight:600;margin:0;letter-spacing:-.01em}.chead .sub{font-size:13px;color:var(--text-2)}
+.tagrow{display:flex;gap:8px;flex-wrap:wrap}
+.pill{font-family:var(--mono);font-size:11px;padding:4px 10px;border:1px solid var(--border-2);color:var(--text-2);border-radius:6px}
+.desc{color:var(--text-2);font-size:15px;margin:14px 0 0;max-width:82ch}.desc b{color:var(--text)}
+.strip{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:8px}
+.frame img{width:100%;border:1px solid var(--border);border-radius:7px;background:#05070d;display:block}
+.frame figcaption{margin-top:7px;font-size:12px;color:var(--text-2);line-height:1.4}
+.frame .ft{font-family:var(--mono);font-size:10.5px;color:var(--blue);display:block}
+.stage{display:grid;grid-template-columns:1fr 1.05fr;gap:28px;align-items:center;padding:28px 0;border-bottom:1px solid var(--border)}
 .stage:nth-child(even) .fig{order:2}
-.stage img{width:100%;border:1px solid var(--border);border-radius:4px;background:#05070d}
-.stage .n{font-family:var(--mono);font-size:12px;color:var(--blue);letter-spacing:.1em}
-.stage h3{font-size:21px;font-weight:600;margin:6px 0 3px}
-.stage .st{color:var(--fire-2);font-size:13px;font-family:var(--mono);margin-bottom:12px}
-.stage p{color:var(--text-2);font-size:14px;margin:0;line-height:1.7}
-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
-th{text-align:left;color:var(--text-3);font-weight:500;text-transform:uppercase;letter-spacing:.06em;font-size:10px;
-  padding:9px 12px;border-bottom:1px solid var(--border)}
-td{padding:9px 12px;border-bottom:1px solid var(--surface-2);color:var(--text-2)}
+.stage img{width:100%;border:1px solid var(--border);border-radius:8px;background:#05070d}
+.stage .n{font-family:var(--mono);font-size:12px;color:var(--blue)}
+.stage h3{font-size:22px;font-weight:600;margin:6px 0 3px;letter-spacing:-.01em}
+.stage .st{color:var(--fire-2);font-size:14px;margin-bottom:12px}
+.stage p{color:var(--text-2);font-size:15px;margin:0;line-height:1.7}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px}
+th{text-align:left;color:var(--text-3);font-weight:500;font-size:11px;padding:10px 12px;border-bottom:1px solid var(--border)}
+td{padding:10px 12px;border-bottom:1px solid var(--surface-2);color:var(--text-2)}
 td.num{text-align:right;color:var(--text)}.hi{color:var(--blue)}
-.legend{display:flex;gap:18px;margin:8px 0 0;font-family:var(--mono);font-size:11.5px;color:var(--text-2);flex-wrap:wrap}
-.legend i{display:inline-block;width:22px;height:3px;vertical-align:middle;margin-right:6px}
-.note{color:var(--text-3);font-size:12.5px;margin-top:14px}
+.note{color:var(--text-3);font-size:13px;margin-top:12px}
 @media(max-width:820px){.g2{grid-template-columns:1fr}.stage,.stage:nth-child(even){grid-template-columns:1fr}
-  .stage:nth-child(even) .fig{order:0}.nav{gap:12px}.tab{padding:16px 9px}}
+  .stage:nth-child(even) .fig{order:0}.strip{grid-template-columns:repeat(3,1fr)}.nav{gap:10px}.tab{padding:16px 8px}}
 </style>
 
 <div class="nav">
   <span class="brand">FIRE<b>WATCH</b></span>
   <div class="tabs" id="tabs"></div>
-  <div class="sys"><span class="dot"></span>SYSTEM OPERATIONAL</div>
+  <div class="sys"><span class="dot"></span>operational</div>
 </div>
 <div id="app"></div>
 
 <script>
-const FW = /*__DATA__*/;
+const FW=/*__DATA__*/;
 const app=document.getElementById('app');
 const esc=s=>(s==null?'':(''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])));
-const fmt=n=>n==null?'—':(''+n).replace(/\B(?=(\d{3})+(?!\d))/g,',');
-const TABS=[['overview','Overview'],['fires','Fires'],['pipeline','Pipeline'],['results','Results']];
+const TABS=[['overview','Overview'],['fires','Fires'],['pipeline','How it works'],['results','Results']];
 let tab='overview';
-
 document.getElementById('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab" data-t="${k}">${l}</button>`).join('');
-document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.t;location.hash=k2h();render();});
-function k2h(){return '#/'+tab;}
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.t;location.hash='#/'+tab;render();});
 window.addEventListener('hashchange',()=>{const t=location.hash.slice(2);if(TABS.find(x=>x[0]===t)){tab=t;render();}});
+function vd(src,poster,label){return src?`<figure style="margin:0">
+  <video class="scope" muted loop autoplay playsinline preload="auto" poster="${poster||''}"><source src="${src}" type="video/mp4"></video>
+  <figcaption style="font-size:12.5px;color:var(--text-3);margin-top:8px">${label}</figcaption></figure>`:'';}
+function play(){document.querySelectorAll('video').forEach(v=>{v.muted=true;const p=v.play();if(p&&p.catch)p.catch(()=>{});});}
+function render(){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
+  ({overview:vO,fires:vF,pipeline:vP,results:vR}[tab]||vO)();play();}
 
-function video(src,poster,label){
-  return src?`<div class="vwrap"><span class="vlbl">${label}</span>
-    <video class="scope" muted loop autoplay playsinline preload="auto" poster="${poster||''}">
-    <source src="${src}" type="video/mp4"></video></div>`:'';
-}
-function playVisible(){document.querySelectorAll('video').forEach(v=>{v.muted=true;const p=v.play();if(p&&p.catch)p.catch(()=>{});});}
-
-function render(){
-  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
-  ({overview:vOverview,fires:vFires,pipeline:vPipeline,results:vResults}[tab]||vOverview)();
-  playVisible();
-}
-
-function vOverview(){
-  const demo=FW.events[0];
+function vO(){const d=FW.events[0];
   app.innerHTML=`<div class="page">
-    <h1>Watching wildfires from <b>orbit</b> — and forecasting where they go.</h1>
-    <p class="lede">FIREWATCH ingests real satellite, weather, terrain and fuel data, detects and
-    <b>tracks</b> the fire over time, <b>forecasts</b> its probabilistic spread with data assimilation,
-    and <b>estimates exposure</b> — then validates every prediction against what actually happened.
-    The demo below runs the full pipeline on the 2024 Park Fire; the blue <span class="hi">MODEL</span>
-    line names the stage executing at each moment.</p>
-    <div class="h-sec">Demo · the whole system on one real fire</div>
-    <div class="grid g2">
-      ${video(demo.tracking,demo.tracking_poster,'1 · tracking · GOES-18')}
-      ${video(demo.response,demo.response_poster,'2 · forecast &amp; exposure')}
+    <h1>See where a wildfire is going, <b>before</b> it gets there.</h1>
+    <p class="lede">FIREWATCH watches a wildfire from satellites, follows it as it grows, and predicts
+    where it will spread next, then checks every prediction against what actually happened.</p>
+    <div class="how"><h4>How to use this</h4>
+      <ul>
+        <li><b>Overview</b> (here): a quick demo of the whole thing on one real fire.</li>
+        <li><b>Fires</b>: watch three real California wildfires play out.</li>
+        <li><b>How it works</b>: each step of the model, in plain terms.</li>
+        <li><b>Results</b>: how accurate the predictions were.</li>
+      </ul>
+      <div class="legend">
+        <span><i style="background:var(--fire-2)"></i>Orange is the actual fire the satellite sees.</span>
+        <span><i style="background:var(--blue)"></i>Blue is what the model is doing or predicting.</span>
+      </div>
     </div>
-    <p class="desc">Left: the satellite tracking. Right: the forecast projected forward with population
-    exposure. Explore the <b>Fires</b>, walk the <b>Pipeline</b> stage by stage, or read the measured
-    <b>Results</b> using the tabs above.</p>
-    <div class="h-sec">Pipeline</div>
-    <p class="lede mono" style="font-size:13px;color:var(--text-2)">
-      ${FW.pipeline.map(s=>s.title).join('  →  ')}</p>
-  </div>`;
-}
-
-function vFires(){
-  const cards=FW.events.map(e=>`<div class="card">
-    <div class="chead"><div><h2>${esc(e.full)}</h2><div class="sub">${esc(e.region)} · ${e.center[0]}°N ${Math.abs(e.center[1])}°W</div></div>
-      <div class="tagrow"><span class="pill">${e.detections} detections</span><span class="pill">${e.area} km² peak</span>
-      <span class="pill">assimilation ${e.delta>=0?'+':''}${e.delta.toFixed(3)} IoU</span></div></div>
+    <div class="h-sec">Demo, the whole system on the 2024 Park Fire</div>
     <div class="grid g2">
-      ${video(e.tracking,e.tracking_poster,'satellite tracking')}
-      ${video(e.response,e.response_poster,'forecast &amp; exposure')}
+      ${vd(d.tracking,d.tracking_poster,'The satellite tracks the fire.')}
+      ${vd(d.response,d.response_poster,'The model forecasts where it spreads and who is nearby.')}
     </div>
-    <p class="desc"><b>Tracking.</b> ${esc(FW.track_desc)}</p>
-    <p class="desc"><b>Forecast &amp; exposure.</b> ${esc(FW.resp_desc)}</p>
-  </div>`).join('');
-  app.innerHTML=`<div class="page"><h1>Historical fires</h1>
-    <p class="lede">Three real California wildfires, each replayed from the first GOES-18 detection over
-    its first six hours. Videos play slowly so each pipeline stage is legible.</p>
-    <div class="grid" style="margin-top:22px">${cards}</div></div>`;
-}
+    <p class="desc">The videos play slowly so you can read each step. The blue line at the bottom of each
+    video names what the model is doing at that moment.</p>
+  </div>`;}
 
-function vPipeline(){
-  const stages=FW.pipeline.map((s,i)=>`<div class="stage">
-    <div class="fig">${s.figure?`<img src="${s.figure}" alt="${esc(s.title)}">`:'<div class="scope" style="height:220px"></div>'}</div>
-    <div><div class="n">STAGE ${String(i+1).padStart(2,'0')}</div><h3>${esc(s.title)}</h3>
-      <div class="st">${esc(s.subtitle)}</div><p>${esc(s.desc)}</p></div>
-  </div>`).join('');
+function vF(){
+  const cards=FW.events.map(e=>{
+    const strip=e.evolution.map(f=>`<figure class="frame" style="margin:0">
+      <img loading="lazy" src="${f.img}"><figcaption><span class="ft">${f.t} min</span>${esc(f.cap)}</figcaption></figure>`).join('');
+    return `<div class="card">
+      <div class="chead"><div><h2>${esc(e.full)}</h2><div class="sub">${esc(e.region)}, ${e.when}</div></div>
+        <div class="tagrow"><span class="pill">${e.detections} detections</span><span class="pill">${e.area} km² at peak</span></div></div>
+      <div class="grid g2">
+        ${vd(e.tracking,e.tracking_poster,'Satellite tracking')}
+        ${vd(e.response,e.response_poster,'Forecast and who is nearby')}</div>
+      <p class="desc"><b>Tracking.</b> ${esc(FW.track_desc)}</p>
+      <p class="desc"><b>Forecast.</b> ${esc(FW.resp_desc)}</p>
+      <div class="h-sec" style="margin:22px 0 12px">Step by step</div>
+      <div class="strip">${strip}</div>
+    </div>`;}).join('');
+  app.innerHTML=`<div class="page"><h1>Three real fires</h1>
+    <p class="lede">Each is replayed from the first satellite detection over its first six hours. Under
+    each pair of videos, the six stills show the fire and the model's read at that moment.</p>
+    <div class="grid" style="margin-top:22px">${cards}</div></div>`;}
+
+function vP(){const st=FW.pipeline.map((s,i)=>`<div class="stage">
+    <div class="fig">${s.figure?`<img src="${s.figure}" alt="${esc(s.title)}">`:''}</div>
+    <div><div class="n">Step ${i+1} of ${FW.pipeline.length}</div><h3>${esc(s.title)}</h3>
+      <div class="st">${esc(s.subtitle)}</div><p>${esc(s.desc)}</p></div></div>`).join('');
   app.innerHTML=`<div class="page"><h1>How it works</h1>
-    <p class="lede">The site is a visual walk through the actual pipeline — raw feeds become detections,
-    detections become a tracked fire object, physics + assimilation become a calibrated probabilistic
-    forecast, and the forecast becomes exposure analysis. Each figure is generated from real data.</p>
-    <div style="margin-top:10px">${stages}</div></div>`;
-}
+    <p class="lede">A walk through what the model does, from raw satellite data to a forecast you can
+    check. Every picture is made from real data.</p>${st}</div>`;}
 
-function vResults(){
-  const r=FW.results||{};
+function vR(){const r=FW.results||{};
   const hs=FW.events[0].skill.map(s=>s.horizon_min);
-  const rows=hs.map(h=>{
-    const cells=FW.events.map(e=>{const s=e.skill.find(x=>x.horizon_min===h);return s?`<td class="num">${s.iou_off.toFixed(3)}</td><td class="num hi">${s.iou_on.toFixed(3)}</td>`:'<td>—</td><td>—</td>';}).join('');
-    return `<tr><td>+${h>=60?(h/60)+' h':h+' min'}</td>${cells}</tr>`;
-  }).join('');
+  const rows=hs.map(h=>{const c=FW.events.map(e=>{const s=e.skill.find(x=>x.horizon_min===h);
+    return s?`<td class="num">${s.iou_off.toFixed(2)}</td><td class="num hi">${s.iou_on.toFixed(2)}</td>`:'<td>n/a</td><td>n/a</td>';}).join('');
+    return `<tr><td>${h>=60?(h/60)+' h':h+' min'}</td>${c}</tr>`;}).join('');
   const heads=FW.events.map(e=>`<th colspan="2" style="text-align:center">${esc(e.name)}</th>`).join('');
-  const sub=FW.events.map(()=>'<th>base</th><th class="hi">assim</th>').join('');
-  const g=(k,cap)=>r[k]?`<div class="card"><img class="scope" src="${r[k]}" style="border:none"><p class="note">${cap}</p></div>`:'';
+  const sub=FW.events.map(()=>'<th>plain</th><th class="hi">with data</th>').join('');
+  const g=(k,cap)=>r[k]?`<div class="card"><img class="scope" style="border:none" src="${r[k]}"><p class="note">${cap}</p></div>`:'';
   app.innerHTML=`<div class="page"><h1>Results</h1>
-    <p class="lede">Ground truth is the GOES-18 active-fire progression. Assimilating satellite detections
-    into the physical prior lifts perimeter agreement at every horizon on all three fires — a modest,
-    honest gain, since geostationary pixels are coarse (~2 km).</p>
-    <div class="h-sec">Perimeter IoU vs GOES-observed truth · baseline vs assimilation</div>
-    <div class="card" style="padding:0"><table>
-      <thead><tr><th>Horizon</th>${heads}</tr><tr><th></th>${sub}</tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="h-sec">Custom analysis</div>
-    <div class="grid g2">${g('growth','Tracked fire extent (convex hull of GOES detections) versus time, for all three fires.')}
-      ${g('performance','Mean perimeter IoU across the three fires, baseline versus assimilation, per horizon.')}</div>
-    <div class="grid g2" style="margin-top:22px">${g('detections','Cumulative GOES fire-pixel detections over the replay window.')}
-      ${r.calibration?`<div class="card"><img class="scope" src="${r.calibration}" style="border:none"><p class="note">Reliability of the burn-probability field, raw vs temperature-scaled.</p></div>`:''}</div>
-  </div>`;
-}
+    <p class="lede">We check the forecast against what the satellite later observed. Feeding live
+    detections into the model improves the overlap with the real fire at every time step, on all three
+    fires. The gain is real but modest, since satellite pixels are coarse (about 2 km).</p>
+    <div class="h-sec">Overlap with the real fire (higher is better)</div>
+    <div class="card" style="padding:0;overflow-x:auto"><table>
+      <thead><tr><th>Time ahead</th>${heads}</tr><tr><th></th>${sub}</tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="h-sec">Graphs</div>
+    <div class="grid g2">
+      ${g('growth','How big each fire grew over time, from the satellite.')}
+      ${g('performance','How well the forecast matched the real fire: plain model vs model with live data.')}
+      ${g('detections','How many fire pixels the satellite saw, adding up over time.')}
+      ${g('spread','How fast each fire moved, on average.')}
+      ${g('coverage','How often the truth fell inside the model 90% region. The dashed line is the target.')}
+      ${g('calibration','Whether the model probabilities are honest, before and after calibration.')}
+    </div></div>`;}
 
 (function(){const t=location.hash.slice(2);if(TABS.find(x=>x[0]===t))tab=t;render();})();
 </script>
