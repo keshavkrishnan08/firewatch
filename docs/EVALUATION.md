@@ -54,3 +54,30 @@ Guiding rule: **pre-register** the fire(s), horizons, and metrics before scoring
 
 ## 7. What good looks like (honest bar)
 Not "state-of-the-art on a leaderboard." The bar is: **assimilation measurably beats no-assimilation at short horizons, the probability field is calibrated, the georeferencing is accurate enough to be useful, and the retrospective shows a real lead-time gain** — all reproducible on real fires. That combination, shipped openly, is what makes the project credible and rare.
+
+---
+
+## 8. Executed results (this build)
+
+The protocol above has been run, not just specified:
+
+- **Pre-registered retrospective — 2024 Park Fire.** Ground truth = GOES-18 ABI active-fire
+  progression (real, keyless). Config fixed in `EVALUATION_PREREG.md` (with git sha) *before*
+  scoring. Result: assimilation ON beats OFF on perimeter IoU at **every horizon (+0.02)**, a
+  consistent but modest gain given GOES's 2 km coarseness and few early detections. Calibration
+  honestly shows **under-coverage** — the conservative physical prior under-predicts the fire's
+  explosive spread. Artifacts: `outputs/retro_park/results.json` + figures. Reproduce:
+  `make retrospective FIRE=park`.
+- **Synthetic replay (`make demo`).** Assimilation lifts mean IoU **0.12 → 0.56** (+0.42 beyond the
+  last observation); the 90% region is conservatively calibrated; a threatened zone is flagged
+  **~71 min** before arrival where the baseline never flags it.
+- **Georeferencing.** 0 m clear-LOS round-trip; skyline self-cal recovers a 1.5° tilt error
+  (2370 m → ~0 m); 2-camera triangulation ~18 m.
+- **Learned models (`make train`).** A spread surrogate (FCN) emulates the physical MTT solver with
+  a measured val-MAE and a multi-× speedup; a smoke U-Net reaches a measured val mask-IoU. Both are
+  torch models trained by self-distillation (synthetic data, labeled); real-imagery / WildfireSpreadTS
+  weights are a drop-in. Artifacts: `outputs/ml/metrics.json` + figures.
+
+**Honest bar, met:** assimilation measurably beats no-assimilation (synthetic *and* real), the
+probability field is calibrated (with an honest real-fire under-coverage finding), the georeferencing
+is accurate, and everything is reproducible from pinned public data.

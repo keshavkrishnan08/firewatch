@@ -30,6 +30,15 @@ def main() -> None:
     fp.add_argument("--fire", required=True)
     fp.add_argument("--members", type=int, default=60)
 
+    tp = sub.add_parser("train", help="train the learned models (spread surrogate + smoke segmenter)")
+    tp.add_argument("--smoke-frames", type=int, default=600)
+    tp.add_argument("--smoke-epochs", type=int, default=12)
+    tp.add_argument("--surrogate-samples", type=int, default=400)
+    tp.add_argument("--surrogate-epochs", type=int, default=30)
+
+    rt = sub.add_parser("retrospective", help="run a pre-registered retrospective on a real fire")
+    rt.add_argument("--fire", default="park", help="registered fire key (e.g. 'park')")
+
     args = p.parse_args()
 
     if args.cmd in ("build-demo", "replay"):
@@ -44,6 +53,14 @@ def main() -> None:
         from firewatch.api.replay import run_replay
 
         run_replay(args.fire, n_members=args.members)
+    elif args.cmd == "train":
+        from firewatch.train import train_all
+
+        train_all(args.smoke_frames, args.smoke_epochs, args.surrogate_samples, args.surrogate_epochs)
+    elif args.cmd == "retrospective":
+        from firewatch.retrospective import run_retrospective
+
+        run_retrospective(args.fire)
 
 
 if __name__ == "__main__":

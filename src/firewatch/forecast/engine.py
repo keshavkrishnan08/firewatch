@@ -83,9 +83,10 @@ def run_forecast(
     pf_config: ParticleFilterConfig | None = None,
     horizons: list[int] | None = None,
     initial_mask=None,
+    surrogate=None,
 ) -> ForecastResult:
     horizons = horizons or HORIZONS
-    ens = Ensemble.generate(grid, ignition_lonlat, ensemble_config, initial_mask=initial_mask).run()
+    ens = Ensemble.generate(grid, ignition_lonlat, ensemble_config, initial_mask=initial_mask).run(surrogate=surrogate)
     did_assim = False
     if assimilate and observations:
         # only assimilate observations up to issue time (causal masking)
