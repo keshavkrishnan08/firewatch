@@ -34,12 +34,12 @@ BLUE = "#4c9aff"  # what the model is doing (distinct from fire orange / track c
 def _model_action_track(t, cfg):
     """One line naming the pipeline stage the model is executing at time t (tracking video)."""
     if t < 60:
-        return "DETECTING active-fire pixels · GOES-18 ABI L2-FDC"
+        return "DETECTING active-fire pixels, GOES-18 ABI L2-FDC"
     if t < 120:
-        return "CLUSTERING detections into a fire object · DBSCAN"
+        return "CLUSTERING detections into a fire object, DBSCAN"
     if t < cfg.assim_min:
-        return "TRACKING the front · nearest-centroid data association"
-    return "FORECASTING spread · Rothermel + minimum-travel-time ensemble"
+        return "TRACKING the front, nearest-centroid data association"
+    return "FORECASTING spread, Rothermel + minimum-travel-time ensemble"
 
 
 def _hillshade(elev: np.ndarray, cell_m: float, az=315.0, alt=45.0) -> np.ndarray:
@@ -156,7 +156,7 @@ def tracking_figure(bundle, track: FireTrack, on, ablation_delta: float | None, 
         lines.append(f"{'assimilation ΔIoU':>18} :  {ablation_delta:+.3f}")
     axs.text(0.02, 0.95, "\n".join(lines), color="#c7d0e0", family="monospace", fontsize=9.5,
              va="top", transform=axs.transAxes)
-    axs.text(0.02, 0.03, "GOES-18 active fire · Terrain Tiles · ESA WorldCover · HRRR",
+    axs.text(0.02, 0.03, "GOES-18 active fire, Terrain Tiles, ESA WorldCover, HRRR",
              color="#4a5568", fontsize=7.5, va="bottom", transform=axs.transAxes)
 
     paths = EventPaths(f"retro_{cfg.key}").ensure()
@@ -204,14 +204,14 @@ def _captions(cfg, track, delta):
         (0, 45, "GOES-18 catches the first thermal signature from orbit"),
         (45, 100, "Thermal pixels cluster into a single tracked fire object"),
         (100, a, f"Locked on, the front pushes {heading} across the terrain"),
-        (a, a + 22, f"Forecast issued · assimilating {a // 60} h of satellite detections"),
+        (a, a + 22, f"Forecast issued, assimilating {a // 60} h of satellite detections"),
         (a + 22, w - 45, "Physics + data-assimilation project the spread ahead"),
         (w - 45, w + 1, f"Tracked burn extent surpasses {peak:.0f} km²"),
     ], (f"{cfg.name}: assimilation beat the no-forecast baseline (+{delta:.3f} IoU)"
         if delta is not None else f"{cfg.name}: tracked to {peak:.0f} km²")
 
 
-def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 2, px: int = 600) -> str:
+def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 3, px: int = 600) -> str:
     """Cinematic sped-up time-lapse with narrated subtitles (mp4, loopable scope)."""
     import matplotlib
     matplotlib.use("Agg")
@@ -321,7 +321,7 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 2, 
             ax.add_patch(mpatches.Rectangle((0, 0), 1, 0.235, transform=ax.transAxes, zorder=8,
                                             color="#05070d", alpha=0.30 * max(a, 0.6)))
         if title_a < 0.5:
-            ax.text(0.5, 0.17, "▸ MODEL · " + _model_action_track(t, cfg), transform=ax.transAxes,
+            ax.text(0.5, 0.17, "▸ MODEL, " + _model_action_track(t, cfg), transform=ax.transAxes,
                     ha="center", va="center", color=BLUE, fontproperties=subf_sm, zorder=9, path_effects=shadow)
         if txt and a > 0.02:
             ax.text(0.5, 0.085, txt, transform=ax.transAxes, ha="center", va="center", color="white",
@@ -332,7 +332,7 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 2, 
                                             color="#05070d", alpha=0.45 * title_a))
             ax.text(0.5, 0.56, cfg.name, transform=ax.transAxes, ha="center", va="center", color="white",
                     fontproperties=titlef, alpha=title_a, zorder=11, path_effects=shadow)
-            ax.text(0.5, 0.47, "SATELLITE FIRE TRACKING · GOES-18", transform=ax.transAxes, ha="center",
+            ax.text(0.5, 0.47, "SATELLITE FIRE TRACKING, GOES-18", transform=ax.transAxes, ha="center",
                     va="center", color=NEON, fontproperties=subf_sm, alpha=title_a, zorder=11, path_effects=shadow)
         if black > 0.02:  # fade from black
             ax.add_patch(mpatches.Rectangle((0, 0), 1, 1, transform=ax.transAxes, zorder=12,
@@ -369,7 +369,7 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 2, 
     return str(out)
 
 
-def response_video(bundle, on, cfg, fps: int = 2, px: int = 600, threshold: float = 0.25,
+def response_video(bundle, on, cfg, fps: int = 3, px: int = 600, threshold: float = 0.25,
                    threat_km: float = 4.0) -> tuple[str, list]:
     """Decision-response time-lapse: the forecast spreads, communities light up as they're flagged for
     evacuation, egress routes at risk turn red, with the lead-time / confidence VALUES narrated."""
@@ -463,12 +463,12 @@ def response_video(bundle, on, cfg, fps: int = 2, px: int = 600, threshold: floa
             sz = (150 + 60 * pulse) if active else (70 if warn else 34)
             ax.scatter(*z["xy"], s=sz, facecolor=col, edgecolor="white", linewidths=0.9,
                        alpha=0.97 if active else 0.65, zorder=5)
-        # callouts for the most urgent freshly-flagged zones (name · lead · confidence · population)
+        # callouts for the most urgent freshly-flagged zones (name, lead, confidence, population)
         for z in flagged[:5]:
             if z["flag"] is not None and z["flag"] - step <= h <= z["flag"] + 7 * step:
                 lead_lbl = "imminent" if z["lead"] < 1 else f"{z['lead']:.0f} min"
                 pop_lbl = f"\n{z['pop']:,} residents" if z["pop"] else ""
-                ax.annotate(f"⚠ {z['name']}\n{lead_lbl} · {z['conf']:.0%}{pop_lbl}",
+                ax.annotate(f"⚠ {z['name']}\n{lead_lbl}, {z['conf']:.0%}{pop_lbl}",
                             xy=z["xy"], xytext=(z["xy"][0] + 2.4, z["xy"][1] + 2.4),
                             color="white", fontproperties=subf_sm, zorder=6, path_effects=shadow,
                             arrowprops=dict(arrowstyle="-", color="#ff3b30", lw=1.3))
@@ -488,10 +488,10 @@ def response_video(bundle, on, cfg, fps: int = 2, px: int = 600, threshold: floa
         # legend: what is the MODEL forecast vs the community markers
         ax.text(0.035, 0.875, "▦ MODEL burn probability", transform=ax.transAxes, color="#ff8a5c",
                 fontproperties=subf_sm, va="top", path_effects=shadow)
-        ax.text(0.035, 0.842, "● community · green safe / red flagged", transform=ax.transAxes,
+        ax.text(0.035, 0.842, "● community, green safe / red flagged", transform=ax.transAxes,
                 color="#7bd88f", fontproperties=subf_sm, va="top", path_effects=shadow)
-        act = ("ESTIMATING exposure · population within threat radius" if n_flag
-               else "PROJECTING burn probability · ensemble forecast")
+        act = ("ESTIMATING exposure, population within threat radius" if n_flag
+               else "PROJECTING burn probability, ensemble forecast")
         # dynamic subtitle carrying the response VALUE
         if sub_override is not None:
             txt = sub_override
@@ -500,13 +500,13 @@ def response_video(bundle, on, cfg, fps: int = 2, px: int = 600, threshold: floa
             if near:
                 z = min(near, key=lambda z: z["lead"])
                 lead_lbl = "threat imminent" if z["lead"] < 1 else f"~{z['lead']:.0f} min lead"
-                txt = f"⚠ {z['name']}: recommend evacuation · {lead_lbl} · {z['conf']:.0%} confidence"
+                txt = f"⚠ {z['name']}: recommend evacuation, {lead_lbl}, {z['conf']:.0%} confidence"
             elif h < 25:
                 txt = "Forecast issued, projecting spread and population exposure"
             else:
-                txt = f"{n_flag} {'community' if n_flag == 1 else 'communities'} flagged for evacuation · projecting ahead"
+                txt = f"{n_flag} {'community' if n_flag == 1 else 'communities'} flagged for evacuation, projecting ahead"
         ax.add_patch(mpatches.Rectangle((0, 0), 1, 0.235, transform=ax.transAxes, zorder=8, color="#05070d", alpha=0.30))
-        ax.text(0.5, 0.17, "▸ MODEL · " + act, transform=ax.transAxes, ha="center", va="center", color=BLUE,
+        ax.text(0.5, 0.17, "▸ MODEL, " + act, transform=ax.transAxes, ha="center", va="center", color=BLUE,
                 fontproperties=subf_sm, zorder=9, path_effects=shadow)
         ax.text(0.5, 0.085, txt, transform=ax.transAxes, ha="center", va="center", color="white",
                 fontproperties=subf, zorder=9, path_effects=shadow)
@@ -517,7 +517,7 @@ def response_video(bundle, on, cfg, fps: int = 2, px: int = 600, threshold: floa
     nf = len(flagged)
     total_pop = sum(z["pop"] for z in flagged)
     pop_lbl = f"~{total_pop / 1000:.0f}K residents" if total_pop >= 1000 else f"~{total_pop} residents"
-    summary = (f"{nf} {'community' if nf == 1 else 'communities'} flagged · {pop_lbl} at risk"
+    summary = (f"{nf} {'community' if nf == 1 else 'communities'} flagged, {pop_lbl} at risk"
                if flagged else "No communities crossed the evacuation threshold in-window")
     frames += [render(span, sub_override=summary)] * (fps + 16)
 
@@ -611,14 +611,14 @@ def evolution_frames(bundle, track, on, cfg, responses, n=6, px=560) -> list:
         # what the model is doing / suggesting at this time
         if not post_issue:
             phase = "Tracking"
-            caption = f"Tracking the fire front · {area:.0f} km² · spreading {heading}"
+            caption = f"Tracking the fire front, {area:.0f} km², spreading {heading}"
         else:
             n_flag = sum(1 for r in responses if cfg.assim_min + r["lead_min"] <= t)
             pop = sum(r.get("residents", 0) for r in responses if cfg.assim_min + r["lead_min"] <= t)
             phase = "Forecast"
             if n_flag:
                 popl = f"~{pop / 1000:.0f}K residents" if pop >= 1000 else f"~{pop} residents"
-                caption = f"Forecast, {n_flag} communit{'y' if n_flag == 1 else 'ies'} flagged · {popl} at risk"
+                caption = f"Forecast, {n_flag} communit{'y' if n_flag == 1 else 'ies'} flagged, {popl} at risk"
             else:
                 caption = "Forecast issued, projecting spread & exposure"
         ax.text(0.035, 0.955, f"T+{t:.0f} MIN", transform=ax.transAxes, color=NEON, fontproperties=subf_sm,
@@ -641,7 +641,7 @@ def evolution_frames(bundle, track, on, cfg, responses, n=6, px=560) -> list:
 
 
 def _observation_rows(bundle) -> list[dict]:
-    """Real observation provenance: one row per ingested Observation (source · product · time · geometry)."""
+    """Real observation provenance: one row per ingested Observation (source, product, time, geometry)."""
     from firewatch.geo import from_geojson
 
     rows = []
@@ -657,6 +657,60 @@ def _observation_rows(bundle) -> list[dict]:
             "resolution_m": o.provenance.native_resolution_m,
         })
     return rows
+
+
+def _impact(bundle, cfg, threshold=0.25, threat_km=4.0) -> dict:
+    """Predictive value / warning lead time (honest proxy for operational benefit).
+
+    Forecast forward from the observed perimeter at issue time, then for each community measure how
+    many minutes BEFORE the fire actually arrives the forecast crosses the threat threshold near it.
+    That advance warning is the operationally meaningful quantity (evacuation lead time), and we report
+    residents given warning, not a fabricated 'lives saved' count.
+    """
+    from firewatch.decision.exposure import arrival_distribution, cells_in_geom
+    from firewatch.forecast.engine import run_forecast
+    from firewatch.forecast.ensemble import EnsembleConfig
+
+    span = cfg.window_min - cfg.assim_min
+    issue_mask = burned_mask(bundle.truth_arrival, cfg.assim_min)
+    opf = run_forecast(bundle.grid, bundle.ignition_lonlat, bundle.ignition_time, assimilate=False,
+                       issued_at=bundle.ignition_time, horizons=[span], initial_mask=issue_mask,
+                       ensemble_config=EnsembleConfig(n_members=32, wind_dir_sd_deg=28, wind_mult_sd=0.35,
+                                                      ignition_sd_m=cfg.cell_m * 2))
+    ens = opf.ensemble
+    buf_deg = threat_km * 1000.0 / 111_320.0
+    rows, warned, person_min = [], 0, 0.0
+    for z in bundle.zones:
+        buf = z.geom().centroid.buffer(buf_deg)
+        m = cells_in_geom(bundle.grid, buf)
+        if not m.any():
+            continue
+        dist = arrival_distribution(ens, m)
+        flag = None
+        for h in np.arange(0, span + 1, 6):
+            if dist.prob_burned_by(h) >= threshold:
+                flag = float(h)
+                break
+        if flag is None:
+            continue
+        # when the fire actually reaches the community, from the GOES truth (minutes after issue)
+        tr = bundle.truth_arrival[m]
+        actual = float(np.nanmin(tr[np.isfinite(tr)])) - cfg.assim_min if np.isfinite(tr).any() else None
+        warning = round(actual - flag) if actual is not None else None
+        pop = int(getattr(z, "population", 0) or 0)
+        if warning is not None and warning > 0:
+            warned += pop
+            person_min += pop * warning
+        rows.append({"zone": z.name, "residents": pop, "flag_min": round(flag),
+                     "actual_min": round(actual) if actual is not None else None,
+                     "warning_min": warning})
+    leads = [r["warning_min"] for r in rows if r.get("warning_min") and r["warning_min"] > 0]
+    measured = [r for r in rows if r.get("warning_min") is not None]
+    measured.sort(key=lambda r: -r["warning_min"])
+    return {"communities": measured[:16],
+            "residents_warned": warned, "mean_warning_min": round(float(np.mean(leads)), 1) if leads else 0,
+            "max_warning_min": max(leads) if leads else 0,
+            "person_minutes_warning": round(person_min)}
 
 
 def run_historical(key: str, members: int = 28) -> dict:
@@ -695,6 +749,11 @@ def run_historical(key: str, members: int = 28) -> dict:
     except Exception as e:
         log.warning("evolution frames for %s failed: %s", cfg.key, e)
         evolution = []
+    try:
+        impact = _impact(bundle, cfg)
+    except Exception as e:
+        log.warning("impact for %s failed: %s", cfg.key, e)
+        impact = {}
     result = {
         "key": cfg.key, "name": cfg.name, "start_utc": cfg.start_utc,
         "n_frames": track.n_frames, "goes_detections": track.total_detections,
@@ -708,6 +767,7 @@ def run_historical(key: str, members: int = 28) -> dict:
         "response_asset": (f"response_{cfg.key}.mp4" if rvid else None),
         "responses": responses, "n_flagged": len(responses),
         "residents_at_risk": sum(r.get("residents", 0) for r in responses),
+        "impact": impact,
         "evolution": evolution,
         "feeds": sorted({o.provenance.source for o in bundle.observations}),
         # real per-horizon model performance vs GOES-observed truth (the ML metrics table)
