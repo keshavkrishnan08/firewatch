@@ -64,12 +64,22 @@ td.num{text-align:right;color:var(--text)}.hi{color:var(--blue)}
 .stat .v{font-size:28px;font-weight:600;letter-spacing:-.02em;color:var(--blue)}
 .stat .l{font-size:12.5px;color:var(--text-2);margin-top:4px}
 @media(max-width:820px){.stats{grid-template-columns:1fr 1fr}}
-.use{display:flex;flex-direction:column}
-.use img{margin-bottom:14px;aspect-ratio:16/10;object-fit:cover}
-.use .un{font-family:var(--mono);font-size:12px;color:var(--blue)}
-.use h3{font-size:18px;font-weight:600;margin:4px 0 8px;letter-spacing:-.01em}
-.use p{margin:0;color:var(--text-2);font-size:14.5px}
-.use .ucap{margin-top:12px;font-size:11.5px;color:var(--text-3);font-family:var(--mono)}
+.feats{display:flex;flex-direction:column;gap:38px;margin-top:10px}
+.feat{display:grid;grid-template-columns:1.05fr .95fr;gap:34px;align-items:center}
+.feat:nth-child(even) .feat-img{order:2}
+.feat-img img{width:100%;aspect-ratio:16/10;object-fit:cover;border:1px solid var(--border);border-radius:12px;background:#05070d;display:block}
+.feat-img .ucap{margin-top:9px;font-family:var(--mono);font-size:11.5px;color:var(--text-3)}
+.feat-txt .fnum{font-family:var(--mono);font-size:44px;font-weight:600;color:var(--border-2);line-height:1}
+.feat-txt h3{font-size:23px;font-weight:600;margin:6px 0 10px;letter-spacing:-.015em}
+.feat-txt p{margin:0;color:var(--text-2);font-size:15.5px;line-height:1.75}
+/* distinct impact banner for How it helps */
+.band{border:1px solid var(--border-2);border-left:3px solid var(--blue);background:linear-gradient(180deg,#12171d,#0e1216);
+  border-radius:12px;padding:22px 24px;display:grid;grid-template-columns:repeat(4,1fr);gap:26px;margin:6px 0}
+.band .bv{font-size:32px;font-weight:600;letter-spacing:-.02em;color:var(--text)}
+.band .bv b{color:var(--blue);font-weight:600}
+.band .bl{font-size:12.5px;color:var(--text-2);margin-top:5px;line-height:1.45}
+@media(max-width:820px){.band{grid-template-columns:1fr 1fr}.feat,.feat:nth-child(even) .feat-img{order:0}
+  .feat{grid-template-columns:1fr}}
 .stagewrap{border-bottom:1px solid var(--border);padding-bottom:20px}
 .stagewrap .stage{border-bottom:none;padding-bottom:8px}
 .wf{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto}
@@ -104,12 +114,12 @@ const livesRange=r=>{const a=Math.round(r*LIVES_UPLIFT[0]),b=Math.round(r*LIVES_
   return a>0?`${a}–${b}`:(b>0?`up to ${b}`:'<1');};
 function estFor(e){const r=e.residents_at_risk||0,im=e.impact||{};
   const lives=livesRange(r);
-  const warn=(im.max_warning_min>0)?`+${im.max_warning_min} min`:'—';
+  const nf=e.n_flagged||0;
   return `<div class="stats">
     ${chip(lives,'estimated lives protected by earlier warning')}
     ${chip((im.forest_km2||0)+' km²','wildland flagged ahead of the front')}
     ${chip(r.toLocaleString(),'residents in flagged communities')}
-    ${chip(warn,'best warning lead time')}</div>`;}
+    ${chip(nf+(nf===1?' community':' communities'),'flagged ahead of the front')}</div>`;}
 function render(){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
   ({overview:vO,fires:vF,pipeline:vP,results:vR,ops:vOps}[tab]||vO)();play();}
 
@@ -192,7 +202,7 @@ function hitlDiagram(){const W=760,H=360,cx=W/2,cy=180,A=64;
 
 function vO(){const d=FW.events[0];
   app.innerHTML=`<div class="page">
-    <h1>See where a wildfire is going, <b>before</b> it gets there.</h1>
+    <h1>See where a wildfire is going <b>before</b> it gets there.</h1>
     <p class="lede">FIREWATCH watches a wildfire from satellites, follows it as it grows, and predicts
     where it will spread next, then checks every prediction against what actually happened.</p>
     <div class="how"><h4>How to use this</h4>
@@ -207,7 +217,7 @@ function vO(){const d=FW.events[0];
         <span><i style="background:var(--blue)"></i>Blue is what the model is doing or predicting.</span>
       </div>
     </div>
-    <div class="h-sec">Demo, the whole system on the 2024 Park Fire</div>
+    <div class="h-sec">Watch the whole system run on the 2024 Park Fire</div>
     <div class="grid g2">
       ${vd(d.tracking,d.tracking_poster,'The satellite tracks the fire.')}
       ${vd(d.response,d.response_poster,'The model forecasts where it spreads and who is nearby.')}
@@ -235,7 +245,7 @@ function vF(){
       <div class="h-sec" style="margin:22px 0 12px">Step by step</div>
       <div class="strip">${strip}</div>
     </div>`;}).join('');
-  app.innerHTML=`<div class="page"><h1>Three real fires</h1>
+  app.innerHTML=`<div class="page"><h1>Watch three real wildfires unfold from space.</h1>
     <p class="lede">Each is replayed from the first satellite detection over its first six hours. Under
     each pair of videos, the six stills show the fire and the model's read at that moment.</p>
     ${videoLegend}
@@ -248,11 +258,11 @@ function vP(){const st=FW.pipeline.map((s,i)=>`<div class="stagewrap">
         <div class="st">${esc(s.subtitle)}</div><p>${esc(s.desc)}</p></div></div>
     <div class="wf">${(s.inputs&&s.inputs.length)?stepDiagram(s):''}</div>
   </div>`).join('');
-  app.innerHTML=`<div class="page"><h1>How it works</h1>
+  app.innerHTML=`<div class="page"><h1>See how the model turns raw data into a forecast.</h1>
     <p class="lede">A walk through what the model does, from raw satellite data to a forecast you can
     check. Every picture is made from real data, and each step has a small workflow showing what goes
     in and what comes out.</p>
-    <div class="h-sec">The model, end to end</div>
+    <div class="h-sec">See the whole model end to end</div>
     <div class="card" style="text-align:center">${overallDiagram()}</div>
     <div class="h-sec">Each step in detail</div>${st}</div>`;}
 
@@ -276,29 +286,29 @@ function vOps(){
   const forestKm2=ev.reduce((a,e)=>a+((e.impact||{}).forest_km2||0),0);
   const meanGain=(ev.reduce((a,e)=>a+e.delta,0)/ev.length);
   const livesLo=Math.round(flagged*LIVES_UPLIFT[0]),livesHi=Math.round(flagged*LIVES_UPLIFT[1]);
-  const stat=chip;
+  const bs=(v,l)=>`<div><div class="bv">${v}</div><div class="bl">${l}</div></div>`;
   app.innerHTML=`<div class="page">
-    <h1>How FIREWATCH helps.</h1>
+    <h1>See how FIREWATCH helps the people responding.</h1>
     <p class="lede">Wildfire response is a decision made under extreme time pressure. The data to make
     the call already exists and is mostly public. It is just scattered across many screens and never
     turned into a forward look. FIREWATCH pulls it into one place, forecasts where the fire is going,
     and keeps a person in charge of every decision.</p>
-    <div class="h-sec">What that adds up to, across these three fires</div>
-    <div class="stats">
-      ${stat((flagged/1000).toFixed(0)+'K',"residents in flagged communities")}
-      ${stat(livesLo+'–'+livesHi,"estimated lives protected by earlier warning")}
-      ${stat(forestKm2.toFixed(0)+' km²',"wildland flagged ahead of the front")}
-      ${stat('+'+meanGain.toFixed(3),"forecast overlap gained from live data")}
+    <div class="h-sec">See what that adds up to across three fires</div>
+    <div class="band">
+      ${bs('<b>'+(flagged/1000).toFixed(0)+'K</b>',"residents in flagged communities")}
+      ${bs('<b>'+livesLo+'–'+livesHi+'</b>',"estimated lives protected by earlier warning")}
+      ${bs('<b>'+forestKm2.toFixed(0)+'</b> km²',"wildland flagged ahead of the front")}
+      ${bs('<b>+'+meanGain.toFixed(3)+'</b>',"forecast overlap gained from live data")}
     </div>
     <p class="desc">Estimated lives protected is a transparent planning figure, scaled from the exposed
     population and evacuation-lead-time research and shown as a range. It is a modeled estimate, not a
     measured outcome, and a human always makes the evacuation call.</p>
-    <div class="h-sec">How to use it</div>
-    <div class="grid g2">${uses.map(u=>`<div class="card use">
-      ${u[3]?`<img class="scope" src="${u[3]}" alt="${esc(u[1])}">`:''}
-      <div class="un">${u[0]}</div><h3>${esc(u[1])}</h3>
-      <p>${esc(u[2])}</p>
-      <div class="ucap">${esc(u[4])}</div></div>`).join('')}</div>
+    <div class="h-sec">See how to use it in the field</div>
+    <div class="feats">${uses.map(u=>`<div class="feat">
+      <div class="feat-img">${u[3]?`<img class="scope" src="${u[3]}" alt="${esc(u[1])}">`:''}
+        <div class="ucap">${esc(u[4])}</div></div>
+      <div class="feat-txt"><div class="fnum">${u[0]}</div><h3>${esc(u[1])}</h3><p>${esc(u[2])}</p></div>
+    </div>`).join('')}</div>
     <div class="h-sec">Human in the loop</div>
     <div class="card" style="text-align:center">${hitlDiagram()}</div>
     <p class="desc">FIREWATCH forecasts, ranks the risk and hands a recommendation with its confidence
@@ -314,21 +324,21 @@ function vR(){const r=FW.results||{};
   const heads=FW.events.map(e=>`<th colspan="2" style="text-align:center">${esc(e.name)}</th>`).join('');
   const sub=FW.events.map(()=>'<th>plain</th><th class="hi">with data</th>').join('');
   const g=(k,cap)=>r[k]?`<div class="card"><img class="scope" style="border:none" src="${r[k]}"><p class="note">${cap}</p></div>`:'';
-  app.innerHTML=`<div class="page"><h1>Results</h1>
+  app.innerHTML=`<div class="page"><h1>See how close the forecasts came to the real fire.</h1>
     <p class="lede">We check the forecast against what the satellite later observed. Feeding live
     detections into the model improves the overlap with the real fire at every time step, on all three
     fires. The gain is real but modest, since satellite pixels are coarse (about 2 km).</p>
     <div class="h-sec">Overlap with the real fire (higher is better)</div>
     <div class="card" style="padding:0;overflow-x:auto"><table>
       <thead><tr><th>Time ahead</th>${heads}</tr><tr><th></th>${sub}</tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="h-sec">Predictive value, per fire</div>
+    <div class="h-sec">See the predictive value on each fire</div>
     <div class="grid g2">
       ${g('lives','Estimated lives protected by earlier warning, per fire. A transparent planning estimate from the exposed population, shown as a range, not a measured outcome.')}
       ${g('forest','Wildland area the forecast flags ahead of the front, before it burns, per fire. This is the area a human can pre-position crews and warnings against.')}
       ${g('warned','Residents in the communities the forecast flagged, per fire, from real OpenStreetMap population.')}
       ${g('improvement','How much feeding in live data improved the forecast, per fire.')}
     </div>
-    <div class="h-sec">Graphs</div>
+    <div class="h-sec">See the rest of the measurements</div>
     <div class="grid g2">
       ${g('growth','How big each fire grew over time, from the satellite.')}
       ${g('performance','How well the forecast matched the real fire: plain model vs model with live data.')}
