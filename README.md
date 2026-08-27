@@ -10,8 +10,9 @@ ontology of fires, sensors, and threatened assets; assimilate live observations 
 forecast; and drive auditable decisions with lead-time and uncertainty.
 
 > **Status: working end-to-end** — on a reproducible offline synthetic replay, on live public data
-> for a real active fire, *and* scored against a **pre-registered retrospective on a real historical
-> fire** (2024 Park Fire) with GOES-observed ground truth. Terrain, fuels (ESA WorldCover / LANDFIRE),
+> for a real active fire, *and* scored against a **pre-registered retrospective on five real historical
+> fires** (Park, Palisades, Eaton, Davis, Gray — across California, Nevada and Washington) with
+> GOES-observed ground truth. Terrain, fuels (ESA WorldCover / LANDFIRE),
 > and wind (HRRR/NWS) are real; the learned spread surrogate and smoke segmenter are **real trained
 > torch models** (`make train`). Numbers are labeled *synthetic* vs *real* throughout — honesty over
 > hype is a project principle, not a slogan (see `CLAUDE.md`).
@@ -67,8 +68,8 @@ The whole point is measured skill + calibration, reproducibly:
 
 | Metric | What it shows | Status |
 |---|---|---|
-| **Assimilation ON vs OFF** (perimeter IoU) | the central thesis: obs sharpen the forecast | **synthetic demo:** mean IoU **0.12 → 0.56** (+0.42 beyond last obs) · **real Park Fire (GOES truth):** **+0.02 at every horizon** (honest, modest — GOES is coarse) |
-| **Calibration** (reliability, Brier, CRPS, coverage) | probabilities mean what they say | **measured** on demo *and* on the real retrospective (which honestly shows under-coverage of extreme spread) |
+| **Assimilation ON vs OFF** (perimeter IoU) | the central thesis: obs sharpen the forecast | **synthetic demo:** mean IoU **0.12 → 0.56** (+0.42 beyond last obs) · **five real fires (GOES truth):** **+0.01 to +0.13** mean-IoU gain, positive on every fire (honest, modest — GOES is coarse) |
+| **Calibration** (reliability, Brier, coverage) | probabilities mean what they say | **measured** on demo *and* the real retrospective: raw 90% coverage ~**0.68** (over-confident) → **~0.87** after fast-tail spread widening + leave-one-out region calibration; both reported |
 | **Georeferencing** ground error vs perimeter | camera→map is accurate enough to use | **measured:** 0 m clear-LOS round-trip; skyline self-cal cuts a 1.5° tilt error's 2370 m → ~0 m; 2-cam triangulation ~18 m |
 | **Learned surrogate & smoke segmenter** | real torch models on **real** data | **measured** (`make train`): surrogate (trained on **12 real CA landscapes**) **reached-cell MAE ~39 min**, **~9× faster** than MTT; smoke U-Net (trained on **real Pyronear imagery**) **val mask-IoU 0.30** — honest on genuinely hard real smoke |
 | **Evacuation lead-time delta** | the "moved-the-needle" number | **synthetic demo:** ~71 min earlier than baseline · real-fire lead-time needs a longer/finer (VIIRS) retrospective |
@@ -129,36 +130,41 @@ Park-Fire-area roads (Richardson Springs Rd, Cohasset Rd) flagged as egress, and
 |---|---|
 | ![retro ablation](docs/assets/retro_ablation.png) | ![retro map](docs/assets/retro_cop_map.png) |
 
-Assimilation beats the no-assimilation baseline at **every horizon (+0.02 IoU)** — a *consistent but
-modest* gain, because GOES is coarse (2 km) and only a few detections fall in the early assimilation
-window. The calibration analysis honestly surfaces **under-coverage** (the conservative physical prior
-under-predicts the Park Fire's explosive spread — visible as the truth extending beyond the forecast).
-That kind of honest failure analysis is a feature: it points squarely at the remaining upgrades
-(finer VIIRS observations via a FIRMS key, better live fuel-moisture). This is what credible looks like
+Assimilation beats the no-assimilation baseline on **every fire** (mean-IoU gain **+0.01 to +0.13**
+across Park/Palisades/Eaton/Davis/Gray) — modest to strong, because GOES is coarse (2 km) and only a
+few detections fall in the early assimilation window. The calibration analysis first surfaced
+**under-coverage** (a tight ensemble under-predicting explosive spread — truth extending beyond the
+forecast); the fix is a **fast-tail spread mixture** plus **leave-one-out region calibration** that
+lifts raw 90% coverage from ~0.68 to ~0.87, with the irreducible residual (patchy real perimeters at
+2 km) named rather than hidden. That kind of honest analysis is a feature: it points squarely at the
+remaining upgrades (finer VIIRS observations via a FIRMS key, better live fuel-moisture). This is what credible looks like
 on real data.
 
 ### The FIREWATCH instrument — historical fire analysis (`make history`)
 
 A self-contained, dark, dense **scientific analysis tool** (in [`docs/history.html`](docs/history.html),
-`make history` regenerates it) that replays three real historical wildfires from GOES-18: an **events
-browser** (Park 2024, Palisades & Eaton 2025 — real locations, coordinates, dates, areas) opening into
-per-event tabs, all backed by real data:
+`make history` regenerates it) that replays **five real historical wildfires** from GOES-18, across
+three states for geographic and size diversity: **Park** (California, 2024), **Palisades** and **Eaton**
+(California, 2025), **Davis** (Nevada, 2024) and **Gray** (Washington, 2023) — all real locations,
+coordinates, dates and GOES-observed truth. Tabs:
 
-- **Overview** — event metadata + the tracked fire state, driven by a shared time scrubber.
-- **Video** — the tracking + forecast time-lapses (autoplay), each with source provenance (GOES-18
-  ABI-L2-FDCC, ~5-min cadence, window).
-- **Images** — the evolution frames as a scientific archive: what the model shows/suggests at each time.
-- **Forecast** — a **real model-performance table** (per-horizon IoU baseline vs assimilation, Dice,
-  Brier, 90% coverage vs GOES-observed truth) + the ablation.
-- **Analysis** — the tracked fire-extent curve (SVG from real extents) + OSM exposure.
-- **Data** — every ingested observation with source, product, timestamp, pixel count, centroid, and
-  native resolution — the provenance behind every number.
+- **Fires** — the tracking + forecast time-lapses (autoplay) for the flagship fires, each with source
+  provenance (GOES-18 ABI-L2-FDCC), plus per-fire impact estimates and the step-by-step evolution stills.
+- **How it works** — the eight-stage pipeline, each with a real figure and an input→process→output diagram.
+- **Ontology** — one fire rendered as a Palantir-style **object/link/action graph** (feeds → observations
+  → fire → forecasts → communities → recommend, with a human-decides gate) plus the **provenance ledger**.
+- **Retrospective** — the causal replay: warning lead time community by community, the assimilation
+  ablation across all five fires, and **raw vs calibrated 90% coverage**.
+- **Results** — the per-horizon skill table (IoU baseline vs assimilation, Dice, Brier, coverage) and
+  the measurement graphs; **How it helps** frames the operational use.
 
 The tracker is real multi-object tracking (DBSCAN clustering of GOES fire pixels + nearest-centroid
 association); the fires are fused with the assimilating forecast over real terrain (Terrain Tiles),
-fuels (ESA WorldCover) and wind (HRRR). Assimilation beats the no-assimilation baseline on all three
-(mean perimeter IoU): Park **0.155 → 0.179**, Palisades **0.193 → 0.198**, Eaton **0.150 → 0.161** —
-modest, honest, real-data gains (GOES is coarse at ~2 km).
+fuels (ESA WorldCover) and wind (HRRR). Assimilation beats the no-assimilation baseline on **every fire**
+(mean perimeter IoU), by **+0.01 to +0.13** — modest to strong, honest, real-data gains (GOES is coarse
+at ~2 km). The ensemble's 90% credible region, raw, was over-confident (~0.68 mean coverage); a fast-tail
+spread mixture plus **leave-one-out region calibration** lifts it to **~0.87**, with both numbers reported
+and the irreducible residual (patchy real perimeters at 2 km) named honestly.
 
 ### Learned models (`make train`)
 
