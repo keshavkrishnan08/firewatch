@@ -440,6 +440,22 @@ def results_figures(events):
     ax.text(0.5, -0.22, "modeled estimate, not a measured outcome; a human always makes the evacuation call",
             transform=ax.transAxes, ha="center", color=MUT, fontsize=7)
     out["lives"] = save(fig, "lives")
+
+    # decision quality: did the flag hit the communities that actually burned? (precision / recall)
+    dec = [e.get("impact", {}).get("decision", {}) for e in events]
+    if any(d.get("precision") is not None for d in dec):
+        fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG)
+        _style(ax, "Decision quality: flags vs what actually burned")
+        x = np.arange(len(names))
+        prec = [(d.get("precision") or 0) for d in dec]
+        rec = [(d.get("recall") or 0) for d in dec]
+        ax.bar(x - 0.19, prec, 0.36, color=BLUE, label="precision (flagged that burned)")
+        ax.bar(x + 0.19, rec, 0.36, color="#7bd88f", label="recall (burned that were flagged)")
+        ax.set_xticks(x, names)
+        ax.set_ylim(0, 1.05)
+        ax.set_ylabel("fraction", color=MUT, fontsize=8)
+        ax.legend(fontsize=7, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT, loc="lower right")
+        out["decision"] = save(fig, "decision")
     return out
 
 
