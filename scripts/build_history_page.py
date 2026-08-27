@@ -17,7 +17,12 @@ META = {
     "park": {"region": "Tehama & Butte Counties, California", "when": "24 Jul 2024"},
     "palisades": {"region": "Pacific Palisades, Los Angeles", "when": "07 Jan 2025"},
     "eaton": {"region": "Altadena / Eaton Canyon, California", "when": "07 Jan 2025"},
+    "davis": {"region": "Washoe Valley, Nevada", "when": "07 Sep 2024"},
+    "gray": {"region": "Medical Lake, Washington", "when": "18 Aug 2023"},
 }
+# Fires that carry full annotated video on the page (kept under the 16 MB self-contained limit).
+# Every fire is still fully present in Results, Retrospective, Ontology and Data.
+VIDEO_KEYS = {"park", "palisades", "gray"}
 TRACK_DESC = ("The satellite watches the fire. Orange is the fire the satellite actually sees; cyan is "
               "the path the model tracks as it follows the fire; the blue line at the bottom says which "
               "step the model is running. Once the model issues a forecast, the dashed outline is where "
@@ -58,6 +63,7 @@ def build(out_path: Path) -> Path:
         m = META.get(d["key"], {"region": "", "when": ""})
         evo = [{"img": img(ASSETS / e["asset"], 460), "t": e["t_min"], "cap": e["caption"]}
                for e in d.get("evolution", []) if (ASSETS / e["asset"]).exists()]
+        has_video = d["key"] in VIDEO_KEYS and (ASSETS / (d.get("video_asset") or "x")).exists()
         events.append({
             "key": d["key"], "name": d["name"].split(" (")[0], "full": d["name"],
             "region": m["region"], "when": m["when"], "center": d.get("center", [None, None]),
@@ -66,9 +72,13 @@ def build(out_path: Path) -> Path:
             "delta": d["ablation_delta_iou"], "skill": d.get("skill_by_horizon", []),
             "impact": d.get("impact", {}), "residents_at_risk": d.get("residents_at_risk", 0),
             "n_flagged": d.get("n_flagged", 0),
-            "tracking": vid(ASSETS / d["video_asset"]),
+            "coverage90_raw": d.get("coverage90_raw", 0), "coverage90_cal": d.get("coverage90_cal", 0),
+            "observations": d.get("observations", []),
+            "has_video": has_video,
+            "tracking": vid(ASSETS / d["video_asset"]) if has_video else "",
+            "still": img(ASSETS / d["asset"], 760) if (ASSETS / d.get("asset", "x")).exists() else "",
             "tracking_poster": img(ASSETS / f"poster_{d['key']}.png", 600) if (ASSETS / f"poster_{d['key']}.png").exists() else "",
-            "response": vid(ASSETS / d["response_asset"]) if d.get("response_asset") and (ASSETS / d["response_asset"]).exists() else "",
+            "response": vid(ASSETS / d["response_asset"]) if has_video and d.get("response_asset") and (ASSETS / d["response_asset"]).exists() else "",
             "response_poster": img(ASSETS / f"response_poster_{d['key']}.png", 600) if (ASSETS / f"response_poster_{d['key']}.png").exists() else "",
             "evolution": evo,
         })
@@ -171,6 +181,10 @@ td.num{text-align:right;color:var(--text)}.hi{color:var(--blue)}
 .band .bl{font-size:12.5px;color:var(--text-2);margin-top:5px;line-height:1.45}
 @media(max-width:820px){.band{grid-template-columns:1fr 1fr}.feat,.feat:nth-child(even) .feat-img{order:0}
   .feat{grid-template-columns:1fr}}
+.oseg-row{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 4px}
+.oseg{background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-family:inherit;
+  font-size:13px;padding:7px 13px;border-radius:7px;cursor:pointer}
+.oseg.on{border-color:var(--blue);color:var(--text);background:#12171d}
 .stagewrap{border-bottom:1px solid var(--border);padding-bottom:20px}
 .stagewrap .stage{border-bottom:none;padding-bottom:8px}
 .wf{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto}
@@ -190,7 +204,7 @@ svg text{font-family:var(--sans)}
 const FW=/*__DATA__*/;
 const app=document.getElementById('app');
 const esc=s=>(s==null?'':(''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])));
-const TABS=[['overview','Overview'],['fires','Fires'],['pipeline','How it works'],['results','Results'],['ops','How it helps']];
+const TABS=[['overview','Overview'],['fires','Fires'],['pipeline','How it works'],['ontology','Ontology'],['retro','Retrospective'],['results','Results'],['ops','How it helps']];
 const LIVES_UPLIFT=[0.00015,0.00045];
 let tab='overview';
 document.getElementById('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab" data-t="${k}">${l}</button>`).join('');
@@ -212,7 +226,8 @@ function estFor(e){const r=e.residents_at_risk||0,im=e.impact||{};
     ${chip(r.toLocaleString(),'residents in flagged communities')}
     ${chip(nf+(nf===1?' community':' communities'),'flagged ahead of the front')}</div>`;}
 function render(){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
-  ({overview:vO,fires:vF,pipeline:vP,results:vR,ops:vOps}[tab]||vO)();play();}
+  ({overview:vO,fires:vF,pipeline:vP,ontology:vOnt,retro:vRetro,results:vR,ops:vOps}[tab]||vO)();play();}
+let ontKey=null, retroKey=null;
 
 const videoLegend=`<div class="vleg">
   <span><i style="background:var(--fire-2)"></i>Fire the satellite sees</span>
@@ -299,8 +314,10 @@ function vO(){const d=FW.events[0];
     <div class="how"><h4>How to use this</h4>
       <ul>
         <li><b>Overview</b> (here): a quick demo of the whole thing on one real fire.</li>
-        <li><b>Fires</b>: watch three real California wildfires play out.</li>
+        <li><b>Fires</b>: watch real wildfires from several regions play out.</li>
         <li><b>How it works</b>: each step of the model, in plain terms.</li>
+        <li><b>Ontology</b>: one fire as a graph of linked objects and actions.</li>
+        <li><b>Retrospective</b>: the causal replay, warning lead time and calibration.</li>
         <li><b>Results</b>: how accurate the predictions were.</li>
       </ul>
       <div class="legend">
@@ -322,23 +339,28 @@ function vF(){
   const cards=FW.events.map(e=>{
     const strip=e.evolution.map(f=>`<figure class="frame" style="margin:0">
       <img loading="lazy" src="${f.img}"><figcaption><span class="ft">${f.t} min</span>${esc(f.cap)}</figcaption></figure>`).join('');
+    const media=e.has_video
+      ? `<div class="grid g2">
+          ${vd(e.tracking,e.tracking_poster,'Satellite tracking')}
+          ${vd(e.response,e.response_poster,'Forecast and who is nearby')}</div>
+         <p class="desc"><b>Tracking.</b> ${esc(FW.track_desc)}</p>
+         <p class="desc"><b>Forecast.</b> ${esc(FW.resp_desc)}</p>`
+      : `<figure style="margin:0"><img class="scope" src="${e.still}" alt="${esc(e.full)}">
+          <figcaption style="font-size:12.5px;color:var(--text-3);margin-top:8px">Satellite tracking and forecast for ${esc(e.full)}. Full annotated video is on the four flagship fires; every fire is scored in Results and the Retrospective.</figcaption></figure>`;
     return `<div class="card">
       <div class="chead"><div><h2>${esc(e.full)}</h2><div class="sub">${esc(e.region)}, ${e.when}</div></div>
         <div class="tagrow"><span class="pill">${e.detections} detections</span><span class="pill">${e.area} km² at peak</span></div></div>
-      <div class="grid g2">
-        ${vd(e.tracking,e.tracking_poster,'Satellite tracking')}
-        ${vd(e.response,e.response_poster,'Forecast and who is nearby')}</div>
-      <p class="desc"><b>Tracking.</b> ${esc(FW.track_desc)}</p>
-      <p class="desc"><b>Forecast.</b> ${esc(FW.resp_desc)}</p>
+      ${media}
       <div class="h-sec" style="margin:22px 0 12px">What the forecast would have bought</div>
       ${estFor(e)}
       <p class="note">Lives protected is a modeled planning estimate scaled from the exposed population and evacuation-lead-time research, shown as a range. It is not a measured outcome, and a human always makes the evacuation call.</p>
       <div class="h-sec" style="margin:22px 0 12px">Step by step</div>
       <div class="strip">${strip}</div>
     </div>`;}).join('');
-  app.innerHTML=`<div class="page"><h1>Watch three real wildfires unfold from space.</h1>
-    <p class="lede">Each is replayed from the first satellite detection over its first six hours. Under
-    each pair of videos, the six stills show the fire and the model's read at that moment.</p>
+  app.innerHTML=`<div class="page"><h1>Watch real wildfires unfold from space.</h1>
+    <p class="lede">Fires from California, Nevada and Washington, each replayed from its first satellite
+    detection. Three flagship fires carry the full annotated video; every fire below is scored in the
+    Retrospective and Results. Under each, the stills show the fire and the model's read over time.</p>
     ${videoLegend}
     <div class="grid" style="margin-top:22px">${cards}</div></div>`;}
 
@@ -384,7 +406,7 @@ function vOps(){
     the call already exists and is mostly public. It is just scattered across many screens and never
     turned into a forward look. FIREWATCH pulls it into one place, forecasts where the fire is going,
     and keeps a person in charge of every decision.</p>
-    <div class="h-sec">See what that adds up to across three fires</div>
+    <div class="h-sec">See what that adds up to across five fires</div>
     <div class="band">
       ${bs('<b>'+(flagged/1000).toFixed(0)+'K</b>',"residents in flagged communities")}
       ${bs('<b>'+livesLo+'–'+livesHi+'</b>',"estimated lives protected by earlier warning")}
@@ -417,8 +439,8 @@ function vR(){const r=FW.results||{};
   const g=(k,cap)=>r[k]?`<div class="card"><img class="scope" style="border:none" src="${r[k]}"><p class="note">${cap}</p></div>`:'';
   app.innerHTML=`<div class="page"><h1>See how close the forecasts came to the real fire.</h1>
     <p class="lede">We check the forecast against what the satellite later observed. Feeding live
-    detections into the model improves the overlap with the real fire at every time step, on all three
-    fires. The gain is real but modest, since satellite pixels are coarse (about 2 km).</p>
+    detections into the model improves the overlap with the real fire at every time step, on every
+    fire. The gain is real but modest, since satellite pixels are coarse (about 2 km).</p>
     <div class="h-sec">Overlap with the real fire (higher is better)</div>
     <div class="card" style="padding:0;overflow-x:auto"><table>
       <thead><tr><th>Time ahead</th>${heads}</tr><tr><th></th>${sub}</tr></thead><tbody>${rows}</tbody></table></div>
@@ -440,6 +462,117 @@ function vR(){const r=FW.results||{};
       ${g('extent','How large each fire got at its peak, in this window.')}
       ${g('calibration','Whether the model probabilities are honest, before and after calibration.')}
     </div></div>`;}
+
+// ── Ontology (Palantir-style object/link/action graph for one fire) ──
+function ontologyGraph(e){
+  const nObs=e.observations.length,nComm=e.n_flagged||0,nH=e.skill.length;
+  const W=920,H=430;
+  const N1=[16,96,158,46],N2=[200,96,162,46],N3=[400,84,164,66],N4=[602,96,156,46],
+        N5=[602,252,156,54],N6=[772,252,140,54],Wc=[200,246,162,40],Tc=[200,316,162,40],Oc=[400,320,164,40];
+  const b=(n,l,k)=>box(n[0],n[1],n[2],n[3],l,k);
+  const rc=n=>[n[0]+n[2],n[1]+n[3]/2],lc=n=>[n[0],n[1]+n[3]/2],tc=n=>[n[0]+n[2]/2,n[1]],bc=n=>[n[0]+n[2]/2,n[1]+n[3]];
+  const E=(p,q,l)=>{const mx=(p[0]+q[0])/2,my=(p[1]+q[1])/2;return arrow(p[0],p[1],q[0],q[1])+
+    `<text x="${mx}" y="${my-6}" fill="#8a939e" font-size="10.5" text-anchor="middle">${l}</text>`;};
+  const edges=E(rc(N1),lc(N2),'detects')+E(rc(N2),lc(N3),'assimilated')+
+    E(rc(Wc),[N3[0],N3[1]+N3[3]-16],'drives')+E(rc(Tc),bc(N3),'constrains')+
+    E(rc(N3),lc(N4),'produces')+E(bc(N4),tc(N5),'threatens')+
+    E(rc(Oc),lc(N5),'defines')+E(rc(N5),lc(N6),'informs');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">${defs}${edges}
+    ${b(N1,'GOES-18 ABI L2-FDC','data')}${b(N2,'Observation ×'+nObs,'model')}
+    ${b(N3,esc(e.name),'fire')}${b(N4,'Forecast ×'+nH,'out')}
+    ${b(N5,'Community ×'+nComm,'fire')}${b(N6,'Recommend','out')}
+    ${b(Wc,'HRRR wind','data')}${b(Tc,'Terrain + fuels','data')}${b(Oc,'OpenStreetMap','data')}
+    <text x="${N6[0]+N6[2]/2}" y="${N6[1]-8}" fill="#8a939e" font-size="10" text-anchor="middle">human decides</text>
+    <text x="16" y="20" fill="#69707a" font-size="10">FEEDS</text>
+    <text x="400" y="20" fill="#69707a" font-size="10">FIRE OBJECT</text>
+    <text x="772" y="20" fill="#69707a" font-size="10">ACTION</text></svg>`;}
+
+function vOnt(){const evs=FW.events;
+  if(!ontKey||!evs.find(x=>x.key===ontKey)) ontKey=evs.slice().sort((a,b)=>(b.n_flagged||0)-(a.n_flagged||0))[0].key;
+  const e=evs.find(x=>x.key===ontKey);
+  const sel=evs.map(x=>`<button class="oseg${x.key===e.key?' on':''}" onclick="ontKey='${x.key}';vOnt();play()">${esc(x.name)}</button>`).join('');
+  app.innerHTML=`<div class="page">
+    <h1>Everything on the map is one linked object model.</h1>
+    <p class="lede">FIREWATCH is not a pile of layers. Every feed resolves into typed objects, a fire, its
+    observations, its forecasts and the communities in its path, joined by explicit links and driving a
+    small set of human actions. Nothing is a black box. Every number traces back to the observation that
+    produced it.</p>
+    <div class="oseg-row">${sel}</div>
+    <div class="h-sec">The object and link graph for ${esc(e.name)}</div>
+    <div class="card" style="text-align:center">${ontologyGraph(e)}</div>
+    <div class="grid g2" style="margin-top:22px">
+      <div><div class="h-sec" style="margin-top:0">Objects in this incident</div>
+        <div class="stats" style="grid-template-columns:1fr 1fr">
+          ${chip('1','Fire, the anchor object')}
+          ${chip(e.observations.length,'Observations from GOES-18 active fire')}
+          ${chip(e.skill.length,'Forecast objects, one per horizon')}
+          ${chip(e.n_flagged||0,'Threatened community objects')}
+        </div>
+        <div class="h-sec">Actions always keep a human in the loop</div>
+        <div class="how" style="margin-top:0"><ul>
+          <li><b>Recommend evacuation</b> for a flagged community, with the forecast and its confidence attached.</li>
+          <li><b>Pre-position crews</b> against the projected front and the threatened egress roads.</li>
+          <li>FIREWATCH proposes and a person decides. It never issues an order on its own.</li>
+        </ul></div></div>
+      <div><div class="h-sec" style="margin-top:0">Provenance ledger</div>
+        <p class="note" style="margin-top:0">Every observation carries its source, product, native resolution
+        and timestamp. This is the audit trail behind the fire object.</p>
+        <div class="card" style="padding:0;overflow-x:auto"><table>
+          <thead><tr><th>Time (UTC)</th><th>Source</th><th>Product</th><th class="num">Native</th><th class="num">Pixels</th></tr></thead>
+          <tbody>${e.observations.slice(0,10).map(o=>`<tr><td>${esc(o.t_utc)}</td><td>${esc(o.source)}</td><td>${esc(o.product)}</td><td class="num">${o.resolution_m?o.resolution_m+' m':'—'}</td><td class="num">${o.n_pixels}</td></tr>`).join('')}</tbody>
+        </table></div>
+        <p class="note">Showing ${Math.min(10,e.observations.length)} of ${e.observations.length} assimilated observations.</p></div>
+    </div></div>`;}
+
+// ── Retrospective (M5): causal replay of a real named fire, lead-time + calibration ──
+function vRetro(){const evs=FW.events;const av=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+  const covRaw=av(evs.map(e=>e.coverage90_raw||0)),covCal=av(evs.map(e=>e.coverage90_cal||0));
+  const gain=av(evs.map(e=>e.delta||0));
+  // every community the forecast flagged AHEAD of the fire (positive warning), across all fires
+  const warns=[];
+  evs.forEach(e=>(e.impact&&e.impact.communities||[]).forEach(c=>{if(c.warning_min>0)
+    warns.push([c.zone||'unnamed',e.name.split(' Fire')[0],c.warning_min,c.residents||0]);}));
+  warns.sort((a,b)=>b[2]-a[2]);
+  const warnRows=warns.map(w=>`<tr><td>${esc(w[0])}</td><td>${esc(w[1])}</td><td class="num hi">+${w[2]} min</td><td class="num">${w[3].toLocaleString()}</td></tr>`).join('')
+    ||`<tr><td colspan="4" style="color:var(--text-3)">No community was reached after forecast issue in these windows.</td></tr>`;
+  const abl=evs.map(e=>`<tr><td>${esc(e.name)}</td><td class="num">${(e.iou_off||0).toFixed(3)}</td><td class="num hi">${(e.iou_on||0).toFixed(3)}</td><td class="num">${(e.delta>=0?'+':'')+(e.delta||0).toFixed(3)}</td></tr>`).join('');
+  app.innerHTML=`<div class="page">
+    <h1>Replay a real fire and measure the warning it would have given.</h1>
+    <p class="lede">The retrospective is the load-bearing test. Each fire is replayed from its first
+    GOES-18 detection under strict causal masking: no forecast at time t uses any observation after t.
+    We assimilate the first few hours, then score the forecast against what the satellite actually
+    recorded, and read off how much earlier the model flags each community than the fire reaches it.</p>
+    <div class="h-sec">Warning lead time, community by community</div>
+    <p class="desc" style="margin-top:0">For every community the fire reached after forecast issue, the
+    interval between when the forecast first flagged it and when the fire actually arrived. Positive means
+    the model would have warned that community ahead of the front.</p>
+    <div class="card" style="padding:0;overflow-x:auto"><table>
+      <thead><tr><th>Community</th><th>Fire</th><th class="num">Warning</th><th class="num">Residents</th></tr></thead>
+      <tbody>${warnRows}</tbody></table></div>
+    <div class="h-sec">Assimilating live data earns its keep</div>
+    <p class="desc" style="margin-top:0">Forecast overlap with the real fire (mean IoU over horizons),
+    with assimilation off vs on. The gain is real on every fire, and modest because GOES pixels are coarse.</p>
+    <div class="card" style="padding:0;overflow-x:auto"><table>
+      <thead><tr><th>Fire</th><th class="num">Assimilation off</th><th class="num">Assimilation on</th><th class="num">Δ</th></tr></thead>
+      <tbody>${abl}</tbody></table></div>
+    <div class="h-sec">Honest uncertainty, calibrated coverage</div>
+    <div class="stats">
+      ${chip((covRaw*100).toFixed(0)+'%','raw 90% band coverage, over-confident')}
+      ${chip((covCal*100).toFixed(0)+'%','after leave-one-out spread calibration')}
+      ${chip('+'+gain.toFixed(3),'mean forecast overlap gained from live data')}
+      ${chip(evs.length,'real named fires replayed')}
+    </div>
+    <p class="desc">A raw ensemble 90% region contained only about ${(covRaw*100).toFixed(0)}% of the real
+    burned area, it was badly over-confident. Widening the ensemble with a fast-tail mixture and then
+    calibrating the region level on held-out fires lifts that to about ${(covCal*100).toFixed(0)}%. The
+    residual gap is largely irreducible: at 2 km GOES resolution the real perimeter is patchier than any
+    smooth ensemble. Both numbers are reported, nothing is hidden.</p>
+    <div class="how" style="margin-top:22px"><h4>Why this is a fair test</h4><ul>
+      <li>Causal masking: no forecast uses future observations, and the scored window is held out.</li>
+      <li>The assimilation-off arm is a real baseline the on arm has to beat.</li>
+      <li>Ground truth is the GOES-18 active-fire progression, not a model run.</li>
+      <li>Spread calibration is fit leave-one-out, so it is never tuned to the fire being scored.</li>
+    </ul></div></div>`;}
 
 (function(){const t=location.hash.slice(2);if(TABS.find(x=>x[0]===t))tab=t;render();})();
 </script>
