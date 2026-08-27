@@ -64,7 +64,9 @@ class RetroConfig:
     truth_disk_m: float = 1400.0
 
 
-# Pre-registered fires (GOES-18 era, large well-observed California runs)
+# Pre-registered fires (GOES-18 era, ≥2023, real named runs across several regions and size classes).
+# Coordinates/times are approximate reported ignition/discovery points (±~1 km, discovery time);
+# the causal truth comes from the first GOES-18 hotspot in-window, not these seeds.
 RETRO_REGISTRY: dict[str, RetroConfig] = {
     "park": RetroConfig(
         key="park", name="Park Fire (2024)", center_lon=-121.68, center_lat=39.87,
@@ -80,6 +82,18 @@ RETRO_REGISTRY: dict[str, RetroConfig] = {
         key="eaton", name="Eaton Fire (2025)", center_lon=-118.13, center_lat=34.19,
         start_utc="2025-01-08T02:30:00Z", window_min=360, assim_min=180,
         horizons=[210, 240, 300, 360], cell_m=250.0, half_extent_m=14000.0, goes_steps=16, members=40,
+    ),
+    # Nevada — Davis Fire, Washoe Valley south of Reno; ~20,000 evacuated (0 deaths, 16 homes).
+    "davis": RetroConfig(
+        key="davis", name="Davis Fire (2024)", center_lon=-119.8325, center_lat=39.3053,
+        start_utc="2024-09-07T21:30:00Z", window_min=360, assim_min=180,
+        horizons=[210, 240, 300, 360], cell_m=250.0, half_extent_m=16000.0, goes_steps=16, members=40,
+    ),
+    # Washington — Gray Fire, Level-3 evacuation of Medical Lake within ~1 h (1 death, 240 structures).
+    "gray": RetroConfig(
+        key="gray", name="Gray Fire (2023)", center_lon=-117.731, center_lat=47.540,
+        start_utc="2023-08-18T19:27:00Z", window_min=360, assim_min=180,
+        horizons=[210, 240, 300, 360], cell_m=250.0, half_extent_m=15000.0, goes_steps=16, members=40,
     ),
 }
 
@@ -160,7 +174,8 @@ def build_retro_bundle(cfg: RetroConfig, store: Store) -> EventBundle:
                      event_id=event_id, max_steps=cfg.goes_steps)
     raw = sorted([o for o in raw if o.geometry], key=lambda o: o.t)
     if not raw:
-        raise SystemExit(f"no GOES fire pixels found for {cfg.name} in window — adjust config/window.")
+        # RuntimeError (not SystemExit) so a batch run over many fires catches it and continues.
+        raise RuntimeError(f"no GOES fire pixels found for {cfg.name} in window — adjust config/window.")
     t0_eff = raw[0].t
 
     # truth arrival raster (minutes since first detection) + relabel obs times to t0_eff

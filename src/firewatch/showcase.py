@@ -326,18 +326,18 @@ def results_figures(events):
     ax.legend(fontsize=8, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT)
     out["growth"] = save(fig, "growth")
 
-    # model performance, grouped bars per horizon (mean across fires)
-    hs = [s["horizon_min"] for s in events[0].get("skill_by_horizon", [])]
-    if hs:
-        base = np.array([np.mean([[s for s in e["skill_by_horizon"] if s["horizon_min"] == h][0]["iou_off"]
-                                  for e in events]) for h in hs])
-        assim = np.array([np.mean([[s for s in e["skill_by_horizon"] if s["horizon_min"] == h][0]["iou_on"]
-                                    for e in events]) for h in hs])
+    # model performance, grouped bars by forecast step (mean across fires). Fires may carry slightly
+    # different horizon minutes, so average by horizon INDEX and label with the mean horizon.
+    n_h = min((len(e.get("skill_by_horizon", [])) for e in events), default=0)
+    if n_h:
+        base = np.array([np.mean([e["skill_by_horizon"][i]["iou_off"] for e in events]) for i in range(n_h)])
+        assim = np.array([np.mean([e["skill_by_horizon"][i]["iou_on"] for e in events]) for i in range(n_h)])
+        hs = [int(np.mean([e["skill_by_horizon"][i]["horizon_min"] for e in events])) for i in range(n_h)]
         fig, ax = plt.subplots(figsize=(6.4, 3.6), facecolor=BG); _style(ax, "Forecast skill vs GOES-observed perimeter (mean IoU)")
-        x = np.arange(len(hs))
+        x = np.arange(n_h)
         ax.bar(x - 0.19, base, 0.36, color=MUT, label="baseline")
         ax.bar(x + 0.19, assim, 0.36, color=BLUE, label="assimilation")
-        ax.set_xticks(x, [f"+{h // 60}h" if h >= 60 else f"+{h}m" for h in hs])
+        ax.set_xticks(x, [f"+{round(h / 60, 1)}h" for h in hs])
         ax.set_ylabel("IoU", color=MUT, fontsize=8)
         ax.legend(fontsize=8, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT)
         out["performance"] = save(fig, "performance")

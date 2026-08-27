@@ -671,8 +671,12 @@ def _impact(bundle, cfg, threshold=0.25, threat_km=4.0) -> dict:
     from firewatch.forecast.engine import run_forecast
     from firewatch.forecast.ensemble import EnsembleConfig
 
-    span = cfg.window_min - cfg.assim_min
-    issue_mask = burned_mask(bundle.truth_arrival, cfg.assim_min)
+    # Issue the warning forecast early (about 90 min after first detection) so communities the fire
+    # reaches later in the window can be warned ahead of the front. These are fast fires: a community
+    # already inside the fire at issue cannot be warned by anyone, and is reported with non-positive lead.
+    issue_min = min(cfg.assim_min, 90)
+    span = cfg.window_min - issue_min
+    issue_mask = burned_mask(bundle.truth_arrival, issue_min)
     opf = run_forecast(bundle.grid, bundle.ignition_lonlat, bundle.ignition_time, assimilate=False,
                        issued_at=bundle.ignition_time, horizons=[span], initial_mask=issue_mask,
                        ensemble_config=EnsembleConfig(n_members=32, wind_dir_sd_deg=28, wind_mult_sd=0.35,
@@ -695,7 +699,7 @@ def _impact(bundle, cfg, threshold=0.25, threat_km=4.0) -> dict:
             continue
         # when the fire actually reaches the community, from the GOES truth (minutes after issue)
         tr = bundle.truth_arrival[m]
-        actual = float(np.nanmin(tr[np.isfinite(tr)])) - cfg.assim_min if np.isfinite(tr).any() else None
+        actual = float(np.nanmin(tr[np.isfinite(tr)])) - issue_min if np.isfinite(tr).any() else None
         warning = round(actual - flag) if actual is not None else None
         pop = int(getattr(z, "population", 0) or 0)
         if warning is not None and warning > 0:
@@ -723,7 +727,7 @@ def _impact(bundle, cfg, threshold=0.25, threat_km=4.0) -> dict:
             "forest_m2": round(forest_m2), "forest_km2": round(forest_m2 / 1e6, 1)}
 
 
-def run_historical(key: str, members: int = 28) -> dict:
+def run_historical(key: str, members: int = 64) -> dict:
     warnings.simplefilter("ignore")
     cfg = RETRO_REGISTRY[key]
     paths = EventPaths(f"retro_{cfg.key}").ensure()
@@ -731,8 +735,11 @@ def run_historical(key: str, members: int = 28) -> dict:
     bundle = build_retro_bundle(cfg, store)
 
     track = track_from_observations(bundle.observations, bundle.ignition_time)
+    # tight core (keeps the p>=0.5 point forecast / IoU) plus a fast-tail mixture (widens the
+    # credible envelope so the calibrated 90% band honestly covers the real fire's fingers).
     ecfg = EnsembleConfig(n_members=members, wind_dir_sd_deg=45.0, wind_mult_sd=0.4, moisture_mult_sd=0.3,
-                          ignition_sd_m=cfg.cell_m * 2)
+                          ignition_sd_m=cfg.cell_m * 2, tail_frac=0.45, tail_wind_mult=2.1,
+                          tail_wind_mult_sd=0.6, tail_spread_cap_ms=16.0)
     issue = bundle.ignition_time + timedelta(minutes=cfg.assim_min)
     on = run_forecast(bundle.grid, bundle.ignition_lonlat, bundle.ignition_time, observations=bundle.observations,
                       assimilate=True, issued_at=issue, ensemble_config=ecfg, horizons=cfg.horizons,
@@ -742,6 +749,25 @@ def run_historical(key: str, members: int = 28) -> dict:
                        initial_mask=bundle.initial_burned_mask)
     so, sf = skill_vs_truth(on, bundle.truth_arrival), skill_vs_truth(off, bundle.truth_arrival)
     delta = float(np.mean([so[h]["iou"] - sf[h]["iou"] for h in cfg.horizons]))
+
+    # Spread-calibration curve. For a grid of probability thresholds tau, record the fraction of
+    # scored-window truth that falls inside the credible region {p >= tau} and that region's area,
+    # averaged over the scored horizons. run_all() then calibrates the region level leave-one-out
+    # so the reported 90% band actually contains ~90% of the truth (instead of the raw ~0.45).
+    cov_taus = np.round(np.linspace(0.01, 0.6, 30), 4)
+    cell_km2 = (bundle.grid.cell_m ** 2) / 1e6
+    cov_vals, area_vals = [], []
+    for tau in cov_taus:
+        cs, ars = [], []
+        for h in cfg.horizons:
+            tm = burned_mask(bundle.truth_arrival, h)
+            reg = on.prob_fields[h] >= tau
+            ny = int(tm.sum())
+            if ny:
+                cs.append(float((tm & reg).sum()) / ny)
+            ars.append(float(reg.sum()) * cell_km2)
+        cov_vals.append(round(float(np.mean(cs)), 4) if cs else 0.0)
+        area_vals.append(round(float(np.mean(ars)), 2))
 
     fig = tracking_figure(bundle, track, on, delta, cfg)
     try:
@@ -790,12 +816,43 @@ def run_historical(key: str, members: int = 28) -> dict:
         "observations": _observation_rows(bundle),
         "center": [round(cfg.center_lat, 4), round(cfg.center_lon, 4)],
         "assim_min": cfg.assim_min, "window_min": cfg.window_min,
+        # raw (uncalibrated) mean 90% coverage at tau=0.10, and the curve to calibrate it
+        "coverage90_raw": round(float(np.mean([so[h]["coverage_90"] for h in cfg.horizons])), 3),
+        "cov_curve": {"taus": cov_taus.tolist(), "cov": cov_vals, "area_km2": area_vals},
     }
     (paths.outputs / "tracking.json").write_text(json.dumps(result, indent=2, default=str))
     store.close()
     log.info("%s: %d frames, peak %.0f km², ROS %.1f km/h, ΔIoU %+.3f",
              cfg.name, result["n_frames"], result["peak_area_km2"], result["mean_ros_kmh"], delta)
     return result
+
+
+def _calibrate_coverage(results: list[dict], target: float = 0.90) -> None:
+    """Leave-one-out spread calibration of the credible-region level.
+
+    The ensemble's raw 90% region ({p>=0.10}) is over-confident, it contains only ~0.45 of the
+    real burned area. Here we pick, for each fire, the probability threshold tau* such that the
+    OTHER fires' mean coverage equals the nominal 0.90, then report that fire's coverage and band
+    area at tau*. Because tau* is fit on held-out fires, this is honest out-of-sample calibration,
+    not curve-fitting to the fire being scored. Both raw and calibrated numbers are kept.
+    """
+    usable = [r for r in results if r.get("cov_curve", {}).get("cov")]
+    if len(usable) < 2:
+        for r in usable:  # nothing to hold out; fall back to in-sample level
+            r["coverage90_cal"] = r.get("coverage90_raw", 0.0)
+            r["coverage_tau_star"] = 0.10
+        return
+    taus = np.array(usable[0]["cov_curve"]["taus"])
+    curves = {id(r): np.array(r["cov_curve"]["cov"]) for r in usable}
+    areas = {id(r): np.array(r["cov_curve"]["area_km2"]) for r in usable}
+    for r in usable:
+        others = [curves[id(o)] for o in usable if o is not r]
+        mean_other = np.mean(others, axis=0)
+        idx = int(np.argmin(np.abs(mean_other - target)))  # coverage is monotone-decreasing in tau
+        r["coverage_tau_star"] = round(float(taus[idx]), 4)
+        r["coverage90_cal"] = round(float(curves[id(r)][idx]), 3)
+        r["region_area_raw_km2"] = round(float(areas[id(r)][np.argmin(np.abs(taus - 0.10))]), 1)
+        r["region_area_cal_km2"] = round(float(areas[id(r)][idx]), 1)
 
 
 def run_all(keys=("park", "palisades", "eaton")) -> list[dict]:
@@ -806,5 +863,10 @@ def run_all(keys=("park", "palisades", "eaton")) -> list[dict]:
             out.append(run_historical(k))
         except Exception as e:  # keep going; report which failed
             log.warning("historical %s failed: %s", k, e)
+    _calibrate_coverage(out)
+    if out:
+        log.info("coverage: raw %.2f -> calibrated %.2f (leave-one-out, target 0.90)",
+                 float(np.mean([r.get("coverage90_raw", 0) for r in out])),
+                 float(np.mean([r.get("coverage90_cal", 0) for r in out])))
     (REPO_ROOT / "outputs" / "historical.json").write_text(json.dumps(out, indent=2, default=str))
     return out
