@@ -17,6 +17,15 @@ forecast; and drive auditable decisions with lead-time and uncertainty.
 > torch models** (`make train`). Numbers are labeled *synthetic* vs *real* throughout — honesty over
 > hype is a project principle, not a slogan (see `CLAUDE.md`).
 
+> ### ▶ The FIREWATCH instrument
+> A single **self-contained interactive page** — [`docs/history.html`](docs/history.html) (`make history`
+> regenerates it; serve `docs/` or open it directly) — walks the whole system on **five real fires**
+> across California, Nevada and Washington:
+> **Fires** (annotated satellite + forecast time-lapses) · **How it works** (the eight-stage pipeline) ·
+> **Ontology** (one fire as a linked object/link/action graph with a provenance ledger) ·
+> **Decision** (the incident-commander brief, verified against ground truth) ·
+> **Retrospective** (the causal replay, warning lead time, and calibrated coverage) · **Results**.
+
 ### The common operating picture
 
 The COP board (MapLibre + deck.gl), driven entirely by public data through the ontology — Observe
@@ -59,8 +68,10 @@ layer.** None of the individual pieces are new; the bridge and the operational p
 4. **Forecast** spread with a Rothermel + minimum-travel-time ensemble that **assimilates**
    GOES/VIIRS/camera observations via a regularized particle filter → a calibrated burn-probability
    field at +15/+30/+60/+180 min that **sharpens as observations arrive** *(research core)*.
-5. **Decide** — risk-to-population, evacuation lead-time, egress-route threat, staging — every
-   recommendation traceable to its evidence, human-in-the-loop.
+5. **Decide** — reconstruct the incident-commander brief at forecast issue (communities ranked by
+   projected arrival, with an 80% window and confidence), then **verify it against GOES truth**:
+   across the five fires the flag runs at ~**88% precision / 82% recall** — it names the communities
+   that go on to burn. Every recommendation is traceable to its evidence, and human-in-the-loop.
 
 ## Proof, not vibes
 
@@ -69,10 +80,11 @@ The whole point is measured skill + calibration, reproducibly:
 | Metric | What it shows | Status |
 |---|---|---|
 | **Assimilation ON vs OFF** (perimeter IoU) | the central thesis: obs sharpen the forecast | **synthetic demo:** mean IoU **0.12 → 0.56** (+0.42 beyond last obs) · **five real fires (GOES truth):** **+0.01 to +0.13** mean-IoU gain, positive on every fire (honest, modest — GOES is coarse) |
+| **Decision quality** (does it flag the right places?) | the "changes a decision" number | **measured on five real fires (GOES truth):** the reconstructed decision brief flags the communities that actually burn at ~**88% precision / 82% recall**, from a forecast issued ~90 min into the fire — verified per-fire in the **Decision** tab |
 | **Calibration** (reliability, Brier, coverage) | probabilities mean what they say | **measured** on demo *and* the real retrospective: raw 90% coverage ~**0.68** (over-confident) → **~0.87** after fast-tail spread widening + leave-one-out region calibration; both reported |
 | **Georeferencing** ground error vs perimeter | camera→map is accurate enough to use | **measured:** 0 m clear-LOS round-trip; skyline self-cal cuts a 1.5° tilt error's 2370 m → ~0 m; 2-cam triangulation ~18 m |
 | **Learned surrogate & smoke segmenter** | real torch models on **real** data | **measured** (`make train`): surrogate (trained on **12 real CA landscapes**) **reached-cell MAE ~39 min**, **~9× faster** than MTT; smoke U-Net (trained on **real Pyronear imagery**) **val mask-IoU 0.30** — honest on genuinely hard real smoke |
-| **Evacuation lead-time delta** | the "moved-the-needle" number | **synthetic demo:** ~71 min earlier than baseline · real-fire lead-time needs a longer/finer (VIIRS) retrospective |
+| **Warning lead time** | how much earlier a community is flagged than the fire arrives | **synthetic demo:** ~71 min earlier than baseline · **real fires:** measurable where the fire runs into a community *after* forecast issue (e.g. Palisades' Las Flores **+186 min**, Gray's Silver Lake **+36 min**); near-ignition communities are already burning at issue and are reported honestly as such |
 
 Everything regenerates from pinned inputs with one command:
 
