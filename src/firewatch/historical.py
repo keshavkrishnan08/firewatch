@@ -684,7 +684,7 @@ def _impact(bundle, cfg, threshold=0.25, threat_km=4.0) -> dict:
     ens = opf.ensemble
     buf_deg = threat_km * 1000.0 / 111_320.0
     rows, warned, person_min = [], 0, 0.0
-    brief, tp, fp, fn = [], 0, 0, 0  # decision-quality: flagged vs actually-burned (GOES truth)
+    brief, flags, reacheds = [], [], []  # decision-quality: flagged vs actually-burned (GOES truth)
     for z in bundle.zones:
         buf = z.geom().centroid.buffer(buf_deg)
         m = cells_in_geom(bundle.grid, buf)
@@ -703,13 +703,8 @@ def _impact(bundle, cfg, threshold=0.25, threat_km=4.0) -> dict:
         actual = float(np.nanmin(tr[np.isfinite(tr)])) - issue_min if np.isfinite(tr).any() else None
         reached = actual is not None
         pop = int(getattr(z, "population", 0) or 0)
-        # decision-quality tallies: did the forecast flag the communities that actually burned?
-        if flagged and reached:
-            tp += 1
-        elif flagged and not reached:
-            fp += 1
-        elif reached and not flagged:
-            fn += 1
+        flags.append(flagged)
+        reacheds.append(reached)
         # projected ETA (median + 80% window) in minutes since first detection, for the decision brief
         eta = dist.quantile_minutes(0.5)
         eta_lo, eta_hi = dist.quantile_minutes(0.1), dist.quantile_minutes(0.9)
@@ -731,8 +726,8 @@ def _impact(bundle, cfg, threshold=0.25, threat_km=4.0) -> dict:
     measured = [r for r in rows if r.get("warning_min") is not None]
     measured.sort(key=lambda r: -r["warning_min"])
     brief.sort(key=lambda r: (r["eta_med"] is None, r["eta_med"] if r["eta_med"] is not None else 1e9))
-    precision = round(tp / (tp + fp), 2) if (tp + fp) else None
-    recall = round(tp / (tp + fn), 2) if (tp + fn) else None
+    from firewatch.decision.quality import decision_metrics
+    decision = decision_metrics(flags, reacheds)
     # wildland area the forecast flags ahead of the front, the advance-warning footprint a human
     # can pre-position against before it burns: cells the forecast projects the fire into (prob >=
     # threshold) that are burnable vegetation (fuel != 0) and not already burned at issue.
@@ -748,9 +743,7 @@ def _impact(bundle, cfg, threshold=0.25, threat_km=4.0) -> dict:
             "person_minutes_warning": round(person_min),
             "forest_m2": round(forest_m2), "forest_km2": round(forest_m2 / 1e6, 1),
             # decision layer: the reconstructed decision brief at issue + verification vs GOES truth
-            "brief": brief[:14], "issue_min": issue_min,
-            "decision": {"flagged": tp + fp, "flagged_correct": tp, "false_alarms": fp,
-                         "burned": tp + fn, "missed": fn, "precision": precision, "recall": recall}}
+            "brief": brief[:14], "issue_min": issue_min, "decision": decision}
 
 
 def run_historical(key: str, members: int = 64) -> dict:
