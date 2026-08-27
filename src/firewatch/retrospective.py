@@ -105,27 +105,46 @@ def _git_sha() -> str:
         return "unknown"
 
 
-def write_prereg(cfg: RetroConfig) -> str:
-    """Write the pre-registration BEFORE scoring (records git sha + timestamp)."""
+def write_prereg(cfg: RetroConfig | None = None) -> str:
+    """Write the consolidated pre-registration for the whole registered fire set.
+
+    The pinned record is the version-controlled RETRO_REGISTRY plus git history; this file is the
+    human-readable snapshot. `cfg` is accepted for backward compatibility but ignored — the doc
+    always lists every pre-registered fire so it stays consistent regardless of which one is run.
+    """
     now = datetime.now(UTC)
-    text = f"""# Retrospective pre-registration — {cfg.name}
+    rows = "\n".join(
+        f"| {c.name} | `{k}` | ({c.center_lat}, {c.center_lon}) | {c.start_utc} | {c.window_min} | "
+        f"{c.assim_min} | {c.horizons} | {c.cell_m:.0f} m, ±{c.half_extent_m / 1000:.0f} km |"
+        for k, c in RETRO_REGISTRY.items()
+    )
+    text = f"""# Retrospective pre-registration — {len(RETRO_REGISTRY)} real fires (GOES-18 era)
 
-*Committed BEFORE scoring (docs/EVALUATION.md §5). Ground truth = GOES-18 ABI active-fire progression.*
+*The pinned record is the version-controlled `retrospective.RETRO_REGISTRY` and the git history;
+this file is a human-readable snapshot. Ground truth = GOES-18 ABI active-fire progression (real,
+keyless). No forecast issued at time t uses any observation after t (strict causal masking); the
+scored window is held out beyond the assimilation window.*
 
-- **Fire:** {cfg.name}  (key: `{cfg.key}`)
-- **Approx. center:** ({cfg.center_lat}, {cfg.center_lon})
-- **Replay window (UTC):** {cfg.start_utc} + {cfg.window_min} min
-- **Assimilation window:** first {cfg.assim_min} min (GOES only, strict causal masking)
-- **Forecast horizons (min since first detection):** {cfg.horizons}  (all > assimilation window)
-- **Skill metrics:** perimeter IoU, Sørensen–Dice, burn Brier score, coverage @50/80/90%
-- **Decision metric:** evacuation lead-time delta @ confidence threshold = {cfg.threshold}
-- **Baselines:** assimilation OFF (physical prior, no obs); persistence is implicit (early perimeter)
-- **Ensemble:** {cfg.members} members, wide wind prior (direction σ=45°) so ON must earn its skill
-- **Grid:** {cfg.cell_m:.0f} m cells, ±{cfg.half_extent_m/1000:.0f} km; DEM=Terrain Tiles, fuels=ESA WorldCover, wind=HRRR
-- **Committed at:** {now.isoformat()}  ·  **git sha:** {_git_sha()}
+## Pre-registered fires
 
-> No forecast issued at time t uses any observation after t. Results are appended to
-> `outputs/retro_{cfg.key}/results.json` and figures under `outputs/retro_{cfg.key}/figures/`.
+| Fire | key | Approx. center (lat, lon) | Start (UTC) | Window (min) | Assim (min) | Horizons (min) | Grid |
+|---|---|---|---|---|---|---|---|
+{rows}
+
+## Fixed protocol (same for every fire)
+
+- **Skill:** perimeter IoU, Sørensen–Dice, burn Brier score, per-horizon.
+- **Coverage:** empirical coverage of the 90% credible region vs GOES truth, reported **raw** and
+  **calibrated**. Calibration = a fast-tail ensemble spread mixture (tight core preserves the p≥0.5
+  point forecast) plus **leave-one-out** region-level calibration across fires. Never tuned to the
+  fire being scored; both numbers published.
+- **Ablation baseline:** assimilation OFF (physical prior, no obs) — the ON arm must beat it.
+- **Warning lead time:** for each community the fire reaches after forecast issue, the interval
+  between the forecast first flagging it and the fire's GOES-observed arrival (non-positive where the
+  community is already inside the fire at issue, reported honestly).
+- **Reproduce:** `make history` regenerates `outputs/historical.json`, all figures, and the site.
+
+- **Snapshot committed at:** {now.isoformat()}  ·  **git sha:** {_git_sha()}
 """
     from firewatch.config import REPO_ROOT
 
