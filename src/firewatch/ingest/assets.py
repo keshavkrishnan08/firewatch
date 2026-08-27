@@ -60,6 +60,12 @@ def fetch_buildings(bbox: BBox, event_id: str = "event", max_buildings: int = 80
     return structs
 
 
+# Rough population by OSM place type, used only when a place has no explicit `population` tag.
+# Order-of-magnitude figures per the OSM place=* conventions, so a hamlet is not counted like a town.
+PLACE_POP = {"hamlet": 150, "village": 1200, "neighbourhood": 2500, "suburb": 6000,
+             "town": 12000, "city": 60000}
+
+
 @soft
 def fetch_zones(bbox: BBox, event_id: str = "event") -> list[PopulationZone]:
     """Populated places (villages/towns/suburbs) -> evacuation zones."""
@@ -77,10 +83,11 @@ def fetch_zones(bbox: BBox, event_id: str = "event") -> list[PopulationZone]:
         if geom is None or geom.is_empty:
             continue
         c = geom.centroid
+        place = str(row.get("place", "")).lower()
         try:
-            pop = int(row.get("population")) if row.get("population") else 1200
+            pop = int(row.get("population")) if row.get("population") else PLACE_POP.get(place, 1200)
         except (TypeError, ValueError):
-            pop = 1200
+            pop = PLACE_POP.get(place, 1200)
         zones.append(PopulationZone(id=f"zone_{i}", name=str(row.get("name", f"Place {i}")),
                                     geometry=Point(c.x, c.y).buffer(0.006), population=pop))
     log.info("OSM zones: %d populated places", len(zones))
