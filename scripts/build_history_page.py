@@ -64,6 +64,8 @@ def build(out_path: Path) -> Path:
             "area": round(d["peak_area_km2"]), "detections": d["goes_detections"],
             "ros": d["mean_ros_kmh"], "iou_on": d["iou_on"], "iou_off": d["iou_off"],
             "delta": d["ablation_delta_iou"], "skill": d.get("skill_by_horizon", []),
+            "impact": d.get("impact", {}), "residents_at_risk": d.get("residents_at_risk", 0),
+            "n_flagged": d.get("n_flagged", 0),
             "tracking": vid(ASSETS / d["video_asset"]),
             "tracking_poster": img(ASSETS / f"poster_{d['key']}.png", 600) if (ASSETS / f"poster_{d['key']}.png").exists() else "",
             "response": vid(ASSETS / d["response_asset"]) if d.get("response_asset") and (ASSETS / d["response_asset"]).exists() else "",
@@ -148,6 +150,11 @@ td.num{text-align:right;color:var(--text)}.hi{color:var(--blue)}
   border-radius:8px;background:var(--surface);font-size:12.5px;color:var(--text-2)}
 .vleg span{display:inline-flex;align-items:center}
 .vleg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:7px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:6px 0}
+.stat{border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:16px 18px}
+.stat .v{font-size:28px;font-weight:600;letter-spacing:-.02em;color:var(--blue)}
+.stat .l{font-size:12.5px;color:var(--text-2);margin-top:4px}
+@media(max-width:820px){.stats{grid-template-columns:1fr 1fr}}
 .stagewrap{border-bottom:1px solid var(--border);padding-bottom:20px}
 .stagewrap .stage{border-bottom:none;padding-bottom:8px}
 .wf{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto}
@@ -306,12 +313,32 @@ function vOps(){
     ['Dispatch and 911 centers','Turn scattered satellite alerts, camera feeds and weather into one shared, time-stamped picture that everyone is looking at, instead of a wall of separate screens.'],
     ['GIS and intel analysts','Trace every number back to the observation that produced it. Nothing on the map is a black box; each layer is a real datum with a source and a timestamp.'],
   ];
+  const imp=FW.events.map(e=>e.impact||{});
+  const flagged=FW.events.reduce((a,e)=>a+(e.residents_at_risk||0),0);
+  const nFlagged=FW.events.reduce((a,e)=>a+(e.n_flagged||0),0);
+  const maxLead=Math.max(0,...imp.map(i=>i.max_warning_min||0));
+  const meanGain=(FW.events.reduce((a,e)=>a+e.delta,0)/FW.events.length);
+  const stat=(v,l)=>`<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
   app.innerHTML=`<div class="page">
     <h1>An operating picture for wildfire response.</h1>
     <p class="lede">Wildfire response is a decision made under extreme time pressure with fragmented
     information. The data to make the call, satellite hotspots, camera feeds, weather, terrain, fuels,
     already exists and is mostly public, but it is scattered and not turned into a forward look.
     FIREWATCH pulls it into one place, forecasts where the fire is going, and keeps a person in the loop.</p>
+    <div class="h-sec">Predictive value, across these three fires</div>
+    <div class="stats">
+      ${stat((flagged/1000).toFixed(0)+'K',"residents in communities the forecast flagged")}
+      ${stat(nFlagged,"communities flagged ahead of the front")}
+      ${stat('+'+maxLead+' min',"warning for a community reached downwind")}
+      ${stat('+'+meanGain.toFixed(3),"forecast overlap gained from live data")}
+    </div>
+    <p class="desc">Warning lead time is the interval between when the forecast flags a community and
+    when the fire actually reaches it, measured against the GOES active-fire record. It is only positive
+    for communities <em>ahead</em> of the front at forecast time: places already inside the fire when it was
+    first detected cannot be warned by any forecast, and the graph below shows both cases honestly. Evacuation
+    lead time is the factor most associated with surviving a wildfire, so this advance warning is the point.
+    FIREWATCH reports residents flagged and the minutes of warning it would have given; it does not claim a
+    number of lives saved, and a human always makes the evacuation call.</p>
     <div class="h-sec">Who it helps</div>
     <div class="grid g2">${roles.map(r=>`<div class="card"><h3 style="margin:0 0 8px;font-size:18px">${r[0]}</h3>
       <p style="margin:0;color:var(--text-2)">${r[1]}</p></div>`).join('')}</div>
@@ -341,6 +368,11 @@ function vR(){const r=FW.results||{};
     <div class="h-sec">Overlap with the real fire (higher is better)</div>
     <div class="card" style="padding:0;overflow-x:auto"><table>
       <thead><tr><th>Time ahead</th>${heads}</tr><tr><th></th>${sub}</tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="h-sec">Predictive value and warning</div>
+    <div class="grid g2">
+      ${g('warned','How many residents the forecast gave advance warning to, per fire.')}
+      ${g('leadtime','How many minutes of warning each community got before the fire arrived.')}
+    </div>
     <div class="h-sec">Graphs</div>
     <div class="grid g2">
       ${g('growth','How big each fire grew over time, from the satellite.')}

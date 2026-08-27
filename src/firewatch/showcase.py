@@ -95,7 +95,7 @@ PIPELINE = [
 
 # per-stage workflow (input -> process steps -> output), for the Lucidchart-style diagrams
 STAGE_IO = {
-    "ingest": (["GOES-18 ABI", "VIIRS / MODIS", "NOAA HRRR", "Terrain Tiles", "ESA WorldCover", "NIFC · OSM"],
+    "ingest": (["GOES-18 ABI", "VIIRS / MODIS", "NOAA HRRR", "Terrain Tiles", "ESA WorldCover", "NIFC, OSM"],
                ["Fetch per feed", "Attach provenance", "Write Observation objects"],
                ["Time-versioned ontology"]),
     "perception": (["Camera frame"], ["Detector (YOLO / RT-DETR)", "Segment plume (SAM 2 / U-Net)", "Smoke-state features"],
@@ -104,13 +104,13 @@ STAGE_IO = {
                      ["Fire front (lat/lon ± cone)"]),
     "tracking": (["Active-fire pixels"], ["Cluster (DBSCAN)", "Associate across time", "Estimate ROS + heading"],
                  ["Tracked fire object"]),
-    "forecast": (["Fuel · slope · wind", "Ignition / perimeter"], ["Rothermel rate-of-spread", "Minimum-travel-time solve", "Perturbed ensemble"],
+    "forecast": (["Fuel, slope, wind", "Ignition / perimeter"], ["Rothermel rate-of-spread", "Minimum-travel-time solve", "Perturbed ensemble"],
                  ["Burn-probability field"]),
     "assimilation": (["Ensemble", "New observations"], ["Score members by likelihood", "Reweight (particle filter)", "Resample + jitter"],
                      ["Corrected forecast"]),
     "calibration": (["Probability field", "Observed outcome"], ["Reliability + Brier + CRPS", "Temperature / isotonic"],
                     ["Calibrated probabilities"]),
-    "decision": (["Calibrated forecast", "Population · roads (OSM)"], ["Overlay exposure", "Time-to-threat", "Confidence bands"],
+    "decision": (["Calibrated forecast", "Population, roads (OSM)"], ["Overlay exposure", "Time-to-threat", "Confidence bands"],
                  ["Exposure estimate → human"]),
 }
 
@@ -186,7 +186,7 @@ def pipeline_figures():
             mask = seg.segment(img)
             rgb[mask] = (0.45 * rgb[mask] + 0.55 * np.array([76, 154, 255])).astype(np.uint8)
         ax.imshow(rgb); ax.axis("off")
-        ax.set_title("Real tower-cam frame · learned smoke mask (blue)", color=TXT, fontsize=10, loc="left")
+        ax.set_title("Real tower-cam frame, learned smoke mask (blue)", color=TXT, fontsize=10, loc="left")
         out["perception"] = save(fig, "perception")
     except Exception as e:
         log.warning("perception stage figure skipped: %s", e)
@@ -205,7 +205,7 @@ def pipeline_figures():
                 arrowprops=dict(arrowstyle="-", color=MUT))
     ax.text(0.4, terr[8] + 0.75, " camera", color=BLUE, fontsize=8)
     ax.set_xlim(0, 10); ax.set_ylim(0, terr.max() + 1.6); ax.axis("off")
-    ax.set_title("DEM ray-cast · camera → ground coordinates", color=TXT, fontsize=10, loc="left")
+    ax.set_title("DEM ray-cast, camera → ground coordinates", color=TXT, fontsize=10, loc="left")
     out["georeference"] = save(fig, "georeference")
 
     # tracking, clusters + centroid path
@@ -390,6 +390,44 @@ def results_figures(events):
     ax.bar(names, [e["peak_area_km2"] for e in events], color=FIRE, width=0.5)
     ax.set_ylabel("km²", color=MUT, fontsize=8)
     out["extent"] = save(fig, "extent")
+
+    # ── impact: communities flagged + warning lead time ──
+    imp = [e.get("impact", {}) for e in events]
+    # residents in communities the forecast flagged, per fire
+    fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG); _style(ax, "Residents in communities the forecast flagged")
+    vals = [e.get("residents_at_risk", 0) for e in events]
+    ax.bar(names, vals, color=BLUE, width=0.5)
+    ax.set_ylabel("residents", color=MUT, fontsize=8)
+    for x, v in enumerate(vals):
+        ax.text(x, v, f"  {v:,}", color=TXT, fontsize=8, va="bottom", ha="center")
+    out["warned"] = save(fig, "warned")
+
+    # warning lead time by community: positive = forecast warned ahead of the fire,
+    # negative = community already burning when the fire was first detected.
+    comms = []
+    for e, i in zip(events, imp, strict=False):
+        for c in i.get("communities", []):
+            w = c.get("warning_min")
+            if w is None:
+                continue
+            name = c.get("zone") or "unnamed area"
+            comms.append((f"{name} ({e['name'].split(' Fire')[0]})", int(w)))
+    # keep the most informative: strongest warnings and clearest already-burning cases
+    comms = sorted(comms, key=lambda x: x[1])
+    if len(comms) > 12:
+        comms = comms[:4] + comms[-8:]
+    comms = sorted(comms, key=lambda x: x[1])
+    if comms:
+        fig, ax = plt.subplots(figsize=(6.4, max(2.6, 0.34 * len(comms) + 1.2)), facecolor=BG)
+        _style(ax, "Warning lead time by community")
+        ys = list(range(len(comms)))
+        vals = [c[1] for c in comms]
+        colors = [BLUE if v > 0 else "#E06D3B" for v in vals]
+        ax.barh(ys, vals, color=colors, height=0.66)
+        ax.set_yticks(ys, [c[0] for c in comms], fontsize=7.5)
+        ax.axvline(0, color=MUT, lw=0.8)
+        ax.set_xlabel("minutes of warning before the fire arrives  (blue: warned ahead, orange: already burning at detection)", color=MUT, fontsize=7)
+        out["leadtime"] = save(fig, "leadtime")
     return out
 
 
