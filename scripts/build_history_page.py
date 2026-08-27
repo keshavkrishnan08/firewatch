@@ -624,6 +624,8 @@ function vDec(){const evs=FW.events;const av=a=>a.length?a.reduce((x,y)=>x+y,0)/
     and <b>${Math.round(mR*100)}% recall</b> against GOES ground truth: it flags the communities that go on
     to burn, and it catches most of the ones that do, from a forecast issued about an hour and a half into
     the fire. False alarms are honest to report, they are the cost of warning early.</p>
+    ${FW.results&&FW.results.decision?`<div class="card"><img class="scope" style="border:none" src="${FW.results.decision}">
+      <p class="note">Precision and recall of the threat flag on each fire, verified against the GOES active-fire record.</p></div>`:''}
     <div class="h-sec">Beside the real-world response</div>
     <div class="grid g2">
       <div class="card"><div class="un">FIREWATCH</div><h3 style="margin:4px 0 8px;font-size:18px">Brief ready at +${issue} min</h3>
