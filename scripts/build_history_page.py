@@ -89,6 +89,9 @@ def build(out_path: Path) -> Path:
                 for s in show.get("pipeline", [])]
     results = {k: img(ASSETS / fn, 900) for k, fn in (show.get("results") or {}).items() if fn and (ASSETS / fn).exists()}
 
+    from firewatch.decision.evac_timeline import EVAC_TIMELINE
+    for e in events:
+        e["evac"] = EVAC_TIMELINE.get(e["key"], {})
     model = {"events": events, "pipeline": pipeline, "results": results,
              "track_desc": TRACK_DESC, "resp_desc": RESP_DESC}
     html = TEMPLATE.replace("/*__DATA__*/", json.dumps(model, separators=(",", ":")))
@@ -155,6 +158,7 @@ table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5
 th{text-align:left;color:var(--text-3);font-weight:500;font-size:11px;padding:10px 12px;border-bottom:1px solid var(--border)}
 td{padding:10px 12px;border-bottom:1px solid var(--surface-2);color:var(--text-2)}
 td.num{text-align:right;color:var(--text)}.hi{color:var(--blue)}
+.ok{color:#7bd88f;font-weight:600}.dim{color:var(--text-3)}
 .note{color:var(--text-3);font-size:13px;margin-top:12px}
 .vleg{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;padding:12px 16px;border:1px solid var(--border);
   border-radius:8px;background:var(--surface);font-size:12.5px;color:var(--text-2)}
@@ -204,7 +208,7 @@ svg text{font-family:var(--sans)}
 const FW=/*__DATA__*/;
 const app=document.getElementById('app');
 const esc=s=>(s==null?'':(''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])));
-const TABS=[['overview','Overview'],['fires','Fires'],['pipeline','How it works'],['ontology','Ontology'],['retro','Retrospective'],['results','Results'],['ops','How it helps']];
+const TABS=[['overview','Overview'],['fires','Fires'],['pipeline','How it works'],['ontology','Ontology'],['decision','Decision'],['retro','Retrospective'],['results','Results'],['ops','How it helps']];
 const LIVES_UPLIFT=[0.00015,0.00045];
 let tab='overview';
 document.getElementById('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab" data-t="${k}">${l}</button>`).join('');
@@ -226,8 +230,8 @@ function estFor(e){const r=e.residents_at_risk||0,im=e.impact||{};
     ${chip(r.toLocaleString(),'residents in flagged communities')}
     ${chip(nf+(nf===1?' community':' communities'),'flagged ahead of the front')}</div>`;}
 function render(){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
-  ({overview:vO,fires:vF,pipeline:vP,ontology:vOnt,retro:vRetro,results:vR,ops:vOps}[tab]||vO)();play();}
-let ontKey=null, retroKey=null;
+  ({overview:vO,fires:vF,pipeline:vP,ontology:vOnt,decision:vDec,retro:vRetro,results:vR,ops:vOps}[tab]||vO)();play();}
+let ontKey=null, retroKey=null, decKey=null;
 
 const videoLegend=`<div class="vleg">
   <span><i style="background:var(--fire-2)"></i>Fire the satellite sees</span>
@@ -572,6 +576,68 @@ function vRetro(){const evs=FW.events;const av=a=>a.length?a.reduce((x,y)=>x+y,0
       <li>The assimilation-off arm is a real baseline the on arm has to beat.</li>
       <li>Ground truth is the GOES-18 active-fire progression, not a model run.</li>
       <li>Spread calibration is fit leave-one-out, so it is never tuned to the fire being scored.</li>
+    </ul></div></div>`;}
+
+// ── Decision: the reconstructed incident-commander brief + verification vs truth ──
+function vDec(){const evs=FW.events;const av=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+  // default to the fire with the most informative brief: distinct arrival times spread over the window
+  // (dense urban fires reach their surrounding communities near-simultaneously, so their briefs flatten).
+  const spread=e=>new Set(((e.impact||{}).brief||[]).map(x=>x.eta_med)).size;
+  const burned=e=>((e.impact||{}).decision||{}).burned||0;
+  if(!decKey||!evs.find(x=>x.key===decKey)) decKey=evs.slice().sort((a,b)=>spread(b)-spread(a)||burned(b)-burned(a))[0].key;
+  const e=evs.find(x=>x.key===decKey);
+  const dec=(e.impact||{}).decision||{}, brief=(e.impact||{}).brief||[], issue=(e.impact||{}).issue_min||90, ev=e.evac||{};
+  const sel=evs.map(x=>`<button class="oseg${x.key===e.key?' on':''}" onclick="decKey='${x.key}';vDec();play()">${esc(x.name)}</button>`).join('');
+  const rows=brief.map(b=>`<tr><td>${esc(b.zone)}</td>
+    <td class="num hi">${b.p_reached!=null?Math.round(b.p_reached*100)+'%':'—'}</td>
+    <td class="num">${b.eta_med!=null?'+'+b.eta_med+' min':'—'}</td>
+    <td class="num">${(b.eta_lo!=null&&b.eta_hi!=null)?(b.eta_lo===b.eta_hi?'tight':('+'+b.eta_lo+' to +'+b.eta_hi)):'—'}</td>
+    <td class="num">${(b.residents||0).toLocaleString()}</td>
+    <td>${b.reached?'<span class="ok">burned</span>':'<span class="dim">not reached in window</span>'}</td></tr>`).join('')
+    ||'<tr><td colspan="6" style="color:var(--text-3)">No community crossed the threat threshold in this window.</td></tr>';
+  const P=dec.precision!=null?Math.round(dec.precision*100)+'%':'n/a', R=dec.recall!=null?Math.round(dec.recall*100)+'%':'n/a';
+  const mP=av(evs.map(x=>((x.impact||{}).decision||{}).precision).filter(v=>v!=null));
+  const mR=av(evs.map(x=>((x.impact||{}).decision||{}).recall).filter(v=>v!=null));
+  app.innerHTML=`<div class="page">
+    <h1>What the commander would have seen, before the fire got there.</h1>
+    <p class="lede">A forecast only matters if it changes a decision. This is the brief FIREWATCH would
+    have handed an incident commander at forecast issue, about ${issue} minutes after the first satellite
+    detection, using only data available by then: the communities in the fire's path, ranked by projected
+    arrival, with a confidence and an 80% arrival window. Then we check it against what actually burned.</p>
+    <div class="oseg-row">${sel}</div>
+    <div class="h-sec">The decision brief for ${esc(e.name)}, at forecast issue</div>
+    <div class="card" style="padding:0;overflow-x:auto"><table>
+      <thead><tr><th>Community in the path</th><th class="num">P(reached)</th><th class="num">Projected arrival</th><th class="num">80% window</th><th class="num">Residents</th><th>Outcome</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <p class="note">Projected arrival is minutes since first detection (ensemble median, with an 80% window),
+    a forward look the raw fire perimeter does not give you. Outcome is whether the GOES record later shows
+    fire reaching that community inside the replay window.</p>
+    <div class="h-sec">Did it flag the right places? Verified against GOES truth</div>
+    <div class="stats">
+      ${chip(dec.flagged_correct+' / '+dec.flagged,'flagged communities that actually burned (precision '+P+')')}
+      ${chip(dec.flagged_correct+' / '+dec.burned,'of the communities that burned were flagged first (recall '+R+')')}
+      ${chip(dec.false_alarms,'false alarms (flagged but not reached in-window)')}
+      ${chip(Math.round(mP*100)+'% / '+Math.round(mR*100)+'%','mean precision / recall across all five fires')}
+    </div>
+    <p class="desc">Across the five fires the decision layer runs at roughly <b>${Math.round(mP*100)}% precision</b>
+    and <b>${Math.round(mR*100)}% recall</b> against GOES ground truth: it flags the communities that go on
+    to burn, and it catches most of the ones that do, from a forecast issued about an hour and a half into
+    the fire. False alarms are honest to report, they are the cost of warning early.</p>
+    <div class="h-sec">Beside the real-world response</div>
+    <div class="grid g2">
+      <div class="card"><div class="un">FIREWATCH</div><h3 style="margin:4px 0 8px;font-size:18px">Brief ready at +${issue} min</h3>
+        <p style="margin:0;color:var(--text-2)">A ranked, probabilistic forward look for ${esc(e.name)} about
+        ${issue} minutes after the first satellite detection, naming the threatened communities before the
+        fire reaches them.</p></div>
+      <div class="card"><div class="un" style="color:var(--fire-2)">ACTUAL RESPONSE</div>
+        <h3 style="margin:4px 0 8px;font-size:18px">${esc(ev.community||'—')}</h3>
+        <p style="margin:0;color:var(--text-2)">Mandatory evacuation order reported ${esc(ev.local||'(time not recorded)')}.
+        <span style="color:var(--text-3)">Source: ${esc(ev.source||'—')}. Approximate, for context.</span></p></div>
+    </div>
+    <div class="how" style="margin-top:22px"><h4>Read this honestly</h4><ul>
+      <li>FIREWATCH informs a person, it never issues an evacuation order on its own.</li>
+      <li>Precision and recall are measured against the GOES active-fire record, the same ground truth used everywhere here.</li>
+      <li>The real-world evacuation times are approximate and sourced, shown as context, not a head-to-head claim.</li>
     </ul></div></div>`;}
 
 (function(){const t=location.hash.slice(2);if(TABS.find(x=>x[0]===t))tab=t;render();})();
