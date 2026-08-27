@@ -36,6 +36,12 @@ def fetch(bbox: BBox, t0: datetime, t1: datetime, fire_id: str = "fire", event_i
             continue
         power = np.asarray(ds["Power"].values)
         iy, ix = np.where(np.isfinite(power) & (power > 0))
+        if len(iy) == 0 and "Mask" in ds:
+            # Fall back to the FDC fire Mask when radiative power is unretrieved (NaN) — common for
+            # smaller or view-obscured fires. Only used when Power yields nothing, so fires already
+            # detected by Power are unchanged. Codes 10–15 (fire) and 30–35 (temporally filtered).
+            m = np.asarray(ds["Mask"].values)
+            iy, ix = np.where(np.isin(m, (10, 11, 12, 13, 14, 15, 30, 31, 32, 33, 34, 35)))
         if len(iy) == 0:
             continue
         p = ds["goes_imager_projection"]

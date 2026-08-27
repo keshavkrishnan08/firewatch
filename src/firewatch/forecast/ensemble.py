@@ -34,6 +34,13 @@ class EnsembleConfig:
     ignition_sd_m: float = 300.0
     ignition_radius_m: float = 150.0
     spread_cap_ms: float = 3.0
+    # Fast-tail mixture: a fraction of members drawn from a faster wind/spread prior. Real
+    # wind-driven runs have a heavy fast tail, so this widens the credible envelope (honest
+    # coverage) while the tight core keeps the p>=0.5 point forecast (IoU) near the median.
+    tail_frac: float = 0.0
+    tail_wind_mult: float = 1.8
+    tail_wind_mult_sd: float = 0.5
+    tail_spread_cap_ms: float = 12.0
     seed: int = 12
 
 
@@ -59,19 +66,29 @@ class Ensemble:
         cfg = config or EnsembleConfig()
         rng = np.random.default_rng(cfg.seed)
         members: list[Member] = []
-        for _ in range(cfg.n_members):
+        n_tail = int(round(cfg.tail_frac * cfg.n_members))
+        for i in range(cfg.n_members):
             dx = rng.normal(0, cfg.ignition_sd_m)
             dy = rng.normal(0, cfg.ignition_sd_m)
             lon0, lat0 = ignition_lonlat
             # offset ignition in the local meter frame
             x, y = grid.projector.to_local(lon0, lat0)
             lon, lat = grid.projector.to_wgs84(x + dx, y + dy)
+            # tight core keeps the median (point forecast / IoU); the fast-tail members reach beyond
+            # it so the credible envelope honestly covers the real fire's fingers.
+            tail = i >= cfg.n_members - n_tail
+            if tail:
+                wm = float(np.clip(rng.normal(cfg.tail_wind_mult, cfg.tail_wind_mult_sd), 0.6, 4.0))
+                cap = cfg.tail_spread_cap_ms
+            else:
+                wm = float(np.clip(rng.normal(1.0, cfg.wind_mult_sd), 0.4, 2.4))
+                cap = cfg.spread_cap_ms
             params = SpreadParams(
-                wind_mult=float(np.clip(rng.normal(1.0, cfg.wind_mult_sd), 0.4, 2.2)),
-                wind_dir_offset_deg=float(rng.normal(0.0, cfg.wind_dir_sd_deg)),
-                moisture_mult=float(np.clip(rng.normal(1.0, cfg.moisture_mult_sd), 0.4, 2.2)),
-                ros_mult=float(np.clip(rng.normal(1.0, cfg.ros_mult_sd), 0.4, 2.2)),
-                spread_cap_ms=cfg.spread_cap_ms,
+                wind_mult=wm,
+                wind_dir_offset_deg=float(rng.normal(0.0, cfg.wind_dir_sd_deg * (1.4 if tail else 1.0))),
+                moisture_mult=float(np.clip(rng.normal(1.0, cfg.moisture_mult_sd), 0.35, 2.4)),
+                ros_mult=float(np.clip(rng.normal(1.0, cfg.ros_mult_sd), 0.4, 3.0)),
+                spread_cap_ms=cap,
             )
             members.append(Member(params=params, ignition_lonlat=(float(lon), float(lat))))
         return cls(grid, members, cfg, initial_mask=initial_mask)
