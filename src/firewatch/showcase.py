@@ -441,6 +441,22 @@ def results_figures(events):
             transform=ax.transAxes, ha="center", color=MUT, fontsize=7)
     out["lives"] = save(fig, "lives")
 
+    # calibration: raw (over-confident) vs calibrated 90% coverage, per fire, with the target line
+    if any(e.get("coverage90_cal") for e in events):
+        fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG)
+        _style(ax, "90% region coverage: raw vs calibrated")
+        x = np.arange(len(names))
+        raw = [e.get("coverage90_raw", 0) for e in events]
+        cal = [e.get("coverage90_cal", 0) for e in events]
+        ax.bar(x - 0.19, raw, 0.36, color=MUT, label="raw (over-confident)")
+        ax.bar(x + 0.19, cal, 0.36, color=BLUE, label="calibrated")
+        ax.axhline(0.9, color="#7bd88f", lw=1, ls="--")
+        ax.text(len(names) - 0.5, 0.915, "target 0.90", color="#7bd88f", fontsize=7, ha="right")
+        ax.set_xticks(x, names); ax.set_ylim(0, 1.05)
+        ax.set_ylabel("fraction of truth covered", color=MUT, fontsize=8)
+        ax.legend(fontsize=7, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT, loc="lower right")
+        out["coverage_cal"] = save(fig, "coverage_cal")
+
     # decision quality: did the flag hit the communities that actually burned? (precision / recall)
     dec = [e.get("impact", {}).get("decision", {}) for e in events]
     if any(d.get("precision") is not None for d in dec):
