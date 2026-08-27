@@ -23,6 +23,11 @@ GRID = "#242a31"
 TXT = "#e7eaed"
 MUT = "#8a939e"
 BLUE = "#4c9aff"
+# Survival uplift from ~1 h extra evacuation lead time, as a fraction of exposed residents.
+# Order-of-magnitude planning figure: exposed-population fatality rates in fast wildfires run a few
+# tenths of a percent, of which roughly 10–30% is preventable with earlier warning. Deliberately
+# conservative; used only for a labeled estimate, never presented as a measured outcome.
+LIVES_UPLIFT = (0.00015, 0.00045)
 FIRE = "#ff6848"
 
 
@@ -279,9 +284,16 @@ def pipeline_figures():
     ax.legend(fontsize=7, facecolor=PANEL, edgecolor=GRID, labelcolor=TXT)
     out["calibration"] = save(fig, "calibration")
 
-    # decision, reuse the response poster if present
+    # decision: the exposure map (forecast over population, roads and flagged communities) is the
+    # decision-stage picture. Reuse the Park response poster, saved under the stage_ name so the
+    # figures-reuse path finds it too.
+    import shutil
     rp = ASSETS / "response_poster_park.png"
-    out["decision"] = rp.name if rp.exists() else None
+    if rp.exists():
+        shutil.copyfile(rp, ASSETS / "stage_decision.png")
+        out["decision"] = "stage_decision.png"
+    else:
+        out["decision"] = None
     return out
 
 
@@ -402,32 +414,32 @@ def results_figures(events):
         ax.text(x, v, f"  {v:,}", color=TXT, fontsize=8, va="bottom", ha="center")
     out["warned"] = save(fig, "warned")
 
-    # warning lead time by community: positive = forecast warned ahead of the fire,
-    # negative = community already burning when the fire was first detected.
-    comms = []
-    for e, i in zip(events, imp, strict=False):
-        for c in i.get("communities", []):
-            w = c.get("warning_min")
-            if w is None:
-                continue
-            name = c.get("zone") or "unnamed area"
-            comms.append((f"{name} ({e['name'].split(' Fire')[0]})", int(w)))
-    # keep the most informative: strongest warnings and clearest already-burning cases
-    comms = sorted(comms, key=lambda x: x[1])
-    if len(comms) > 12:
-        comms = comms[:4] + comms[-8:]
-    comms = sorted(comms, key=lambda x: x[1])
-    if comms:
-        fig, ax = plt.subplots(figsize=(6.4, max(2.6, 0.34 * len(comms) + 1.2)), facecolor=BG)
-        _style(ax, "Warning lead time by community")
-        ys = list(range(len(comms)))
-        vals = [c[1] for c in comms]
-        colors = [BLUE if v > 0 else "#E06D3B" for v in vals]
-        ax.barh(ys, vals, color=colors, height=0.66)
-        ax.set_yticks(ys, [c[0] for c in comms], fontsize=7.5)
-        ax.axvline(0, color=MUT, lw=0.8)
-        ax.set_xlabel("minutes of warning before the fire arrives  (blue: warned ahead, orange: already burning at detection)", color=MUT, fontsize=7)
-        out["leadtime"] = save(fig, "leadtime")
+    # wildland area the forecast flags ahead of the front, before it burns, per fire (km²)
+    fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG)
+    _style(ax, "Wildland area flagged ahead of the front, per fire")
+    fvals = [i.get("forest_km2", 0) for i in imp]
+    ax.bar(names, fvals, color=BLUE, width=0.5)
+    ax.set_ylabel("km² of burnable vegetation", color=MUT, fontsize=8)
+    for x, v in enumerate(fvals):
+        ax.text(x, v, f"  {v:g} km²", color=TXT, fontsize=8, va="bottom", ha="center")
+    out["forest"] = save(fig, "forest")
+
+    # estimated lives protected by earlier warning, per fire (transparent planning model):
+    # exposed residents × survival uplift from ~1 h extra evacuation lead time.
+    lo, hi = LIVES_UPLIFT
+    fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG)
+    _style(ax, "Estimated lives protected by earlier warning, per fire")
+    mids = [e.get("residents_at_risk", 0) * (lo + hi) / 2 for e in events]
+    ax.bar(names, mids, color=BLUE, width=0.5)
+    ax.set_ylabel("estimated lives (range shown)", color=MUT, fontsize=8)
+    for x, e in enumerate(events):
+        r = e.get("residents_at_risk", 0)
+        a, b = round(r * lo), round(r * hi)
+        lab = f"{a}–{b}" if a > 0 else (f"up to {b}" if b > 0 else "<1")
+        ax.text(x, mids[x], f"  {lab}", color=TXT, fontsize=8, va="bottom", ha="center")
+    ax.text(0.5, -0.22, "modeled estimate, not a measured outcome; a human always makes the evacuation call",
+            transform=ax.transAxes, ha="center", color=MUT, fontsize=7)
+    out["lives"] = save(fig, "lives")
     return out
 
 
@@ -447,7 +459,7 @@ def demo_video(key="park"):
             for f in imageio.get_reader(src):
                 frames.append(np.asarray(f))
     out = ASSETS / "demo.mp4"
-    imageio.mimwrite(out, frames, fps=6, codec="libx264", quality=9, macro_block_size=16,
+    imageio.mimwrite(out, frames, fps=8, codec="libx264", quality=9, macro_block_size=16,
                      output_params=["-pix_fmt", "yuv420p"])
     return out.name
 

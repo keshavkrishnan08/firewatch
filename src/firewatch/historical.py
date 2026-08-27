@@ -211,7 +211,7 @@ def _captions(cfg, track, delta):
         if delta is not None else f"{cfg.name}: tracked to {peak:.0f} km²")
 
 
-def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 3, px: int = 600) -> str:
+def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 4, px: int = 600) -> str:
     """Cinematic sped-up time-lapse with narrated subtitles (mp4, loopable scope)."""
     import matplotlib
     matplotlib.use("Agg")
@@ -369,7 +369,7 @@ def tracking_video(bundle, track: FireTrack, on, cfg, delta=None, fps: int = 3, 
     return str(out)
 
 
-def response_video(bundle, on, cfg, fps: int = 3, px: int = 600, threshold: float = 0.25,
+def response_video(bundle, on, cfg, fps: int = 4, px: int = 600, threshold: float = 0.25,
                    threat_km: float = 4.0) -> tuple[str, list]:
     """Decision-response time-lapse: the forecast spreads, communities light up as they're flagged for
     evacuation, egress routes at risk turn red, with the lead-time / confidence VALUES narrated."""
@@ -707,10 +707,20 @@ def _impact(bundle, cfg, threshold=0.25, threat_km=4.0) -> dict:
     leads = [r["warning_min"] for r in rows if r.get("warning_min") and r["warning_min"] > 0]
     measured = [r for r in rows if r.get("warning_min") is not None]
     measured.sort(key=lambda r: -r["warning_min"])
+    # wildland area the forecast flags ahead of the front, the advance-warning footprint a human
+    # can pre-position against before it burns: cells the forecast projects the fire into (prob >=
+    # threshold) that are burnable vegetation (fuel != 0) and not already burned at issue.
+    grid = bundle.grid
+    forest_m2 = 0.0
+    p = opf.prob_fields.get(span)
+    if p is not None:
+        ahead = (p >= threshold) & (~issue_mask) & (grid.fuel != 0)
+        forest_m2 = float(ahead.sum()) * (grid.cell_m ** 2)
     return {"communities": measured[:16],
             "residents_warned": warned, "mean_warning_min": round(float(np.mean(leads)), 1) if leads else 0,
             "max_warning_min": max(leads) if leads else 0,
-            "person_minutes_warning": round(person_min)}
+            "person_minutes_warning": round(person_min),
+            "forest_m2": round(forest_m2), "forest_km2": round(forest_m2 / 1e6, 1)}
 
 
 def run_historical(key: str, members: int = 28) -> dict:

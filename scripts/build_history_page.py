@@ -155,6 +155,12 @@ td.num{text-align:right;color:var(--text)}.hi{color:var(--blue)}
 .stat .v{font-size:28px;font-weight:600;letter-spacing:-.02em;color:var(--blue)}
 .stat .l{font-size:12.5px;color:var(--text-2);margin-top:4px}
 @media(max-width:820px){.stats{grid-template-columns:1fr 1fr}}
+.use{display:flex;flex-direction:column}
+.use img{margin-bottom:14px;aspect-ratio:16/10;object-fit:cover}
+.use .un{font-family:var(--mono);font-size:12px;color:var(--blue)}
+.use h3{font-size:18px;font-weight:600;margin:4px 0 8px;letter-spacing:-.01em}
+.use p{margin:0;color:var(--text-2);font-size:14.5px}
+.use .ucap{margin-top:12px;font-size:11.5px;color:var(--text-3);font-family:var(--mono)}
 .stagewrap{border-bottom:1px solid var(--border);padding-bottom:20px}
 .stagewrap .stage{border-bottom:none;padding-bottom:8px}
 .wf{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto}
@@ -174,7 +180,8 @@ svg text{font-family:var(--sans)}
 const FW=/*__DATA__*/;
 const app=document.getElementById('app');
 const esc=s=>(s==null?'':(''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])));
-const TABS=[['overview','Overview'],['fires','Fires'],['pipeline','How it works'],['results','Results'],['ops','Who it helps']];
+const TABS=[['overview','Overview'],['fires','Fires'],['pipeline','How it works'],['results','Results'],['ops','How it helps']];
+const LIVES_UPLIFT=[0.00015,0.00045];
 let tab='overview';
 document.getElementById('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab" data-t="${k}">${l}</button>`).join('');
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.t;location.hash='#/'+tab;render();});
@@ -183,6 +190,17 @@ function vd(src,poster,label){return src?`<figure style="margin:0">
   <video class="scope" muted loop autoplay playsinline preload="auto" poster="${poster||''}"><source src="${src}" type="video/mp4"></video>
   <figcaption style="font-size:12.5px;color:var(--text-3);margin-top:8px">${label}</figcaption></figure>`:'';}
 function play(){document.querySelectorAll('video').forEach(v=>{v.muted=true;const p=v.play();if(p&&p.catch)p.catch(()=>{});});}
+const chip=(v,l)=>`<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+const livesRange=r=>{const a=Math.round(r*LIVES_UPLIFT[0]),b=Math.round(r*LIVES_UPLIFT[1]);
+  return a>0?`${a}–${b}`:(b>0?`up to ${b}`:'<1');};
+function estFor(e){const r=e.residents_at_risk||0,im=e.impact||{};
+  const lives=livesRange(r);
+  const warn=(im.max_warning_min>0)?`+${im.max_warning_min} min`:'—';
+  return `<div class="stats">
+    ${chip(lives,'estimated lives protected by earlier warning')}
+    ${chip((im.forest_km2||0)+' km²','wildland flagged ahead of the front')}
+    ${chip(r.toLocaleString(),'residents in flagged communities')}
+    ${chip(warn,'best warning lead time')}</div>`;}
 function render(){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
   ({overview:vO,fires:vF,pipeline:vP,results:vR,ops:vOps}[tab]||vO)();play();}
 
@@ -243,6 +261,26 @@ function overallDiagram(){
   for(let i=0;i<centers.length-1;i++) arr+=arrow(centers[i][0],centers[i][1]+bh/2,centers[i+1][0],centers[i+1][1]-bh/2);
   return `<svg viewBox="0 0 ${W} ${y}" style="width:100%;max-width:${W}px">${defs}${arr}${svg}</svg>`;}
 
+// a curved connector that bows away from a center point, so the loop reads as non-straight
+function arcAround(x1,y1,x2,y2,cx,cy,amt){const mx=(x1+x2)/2,my=(y1+y2)/2;
+  let vx=mx-cx,vy=my-cy;const l=Math.hypot(vx,vy)||1;vx/=l;vy/=l;
+  return `<path d="M${x1},${y1} Q${mx+vx*amt},${my+vy*amt} ${x2},${y2}" fill="none" stroke="#5a6470" stroke-width="1.6" marker-end="url(#ah)"/>`;}
+
+// human-in-the-loop cycle: forecast -> recommendation -> human -> new observations -> forecast
+function hitlDiagram(){const W=760,H=360,cx=W/2,cy=180,A=64;
+  const N=[300,22,160,44],E=[556,150,184,44],S=[300,300,160,44],Wn=[20,150,184,44];
+  const b=(n,label,kind)=>box(n[0],n[1],n[2],n[3],label,kind);
+  const arcs=
+    arcAround(N[0]+N[2],N[1]+N[3]/2, E[0]+E[2]/2,E[1], cx,cy,A)+
+    arcAround(E[0]+E[2]/2,E[1]+E[3], S[0]+S[2],S[1]+S[3]/2, cx,cy,A)+
+    arcAround(S[0],S[1]+S[3]/2, Wn[0]+Wn[2]/2,Wn[1]+Wn[3], cx,cy,A)+
+    arcAround(Wn[0]+Wn[2]/2,Wn[1], N[0],N[1]+N[3]/2, cx,cy,A);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">${defs}${arcs}
+    ${b(N,'FIREWATCH forecast','model')}${b(E,'Recommendation + confidence','out')}
+    ${b(S,'Human decides and acts','fire')}${b(Wn,'New observations arrive','data')}
+    <text x="${cx}" y="${cy-6}" fill="#e7eaed" font-size="14" text-anchor="middle" font-weight="600">Human in the loop</text>
+    <text x="${cx}" y="${cy+14}" fill="#8a939e" font-size="11.5" text-anchor="middle">the loop always closes on a person</text></svg>`;}
+
 function vO(){const d=FW.events[0];
   app.innerHTML=`<div class="page">
     <h1>See where a wildfire is going, <b>before</b> it gets there.</h1>
@@ -282,6 +320,9 @@ function vF(){
         ${vd(e.response,e.response_poster,'Forecast and who is nearby')}</div>
       <p class="desc"><b>Tracking.</b> ${esc(FW.track_desc)}</p>
       <p class="desc"><b>Forecast.</b> ${esc(FW.resp_desc)}</p>
+      <div class="h-sec" style="margin:22px 0 12px">What the forecast would have bought</div>
+      ${estFor(e)}
+      <p class="note">Lives protected is a modeled planning estimate scaled from the exposed population and evacuation-lead-time research, shown as a range. It is not a measured outcome, and a human always makes the evacuation call.</p>
       <div class="h-sec" style="margin:22px 0 12px">Step by step</div>
       <div class="strip">${strip}</div>
     </div>`;}).join('');
@@ -307,50 +348,53 @@ function vP(){const st=FW.pipeline.map((s,i)=>`<div class="stagewrap">
     <div class="h-sec">Each step in detail</div>${st}</div>`;}
 
 function vOps(){
-  const roles=[
-    ['Incident commanders','Decide evacuation timing and where to move crews under uncertainty. FIREWATCH gives a probabilistic view of where the fire will be in 30, 60 and 180 minutes, with a confidence band, instead of a single guess.'],
-    ['Emergency managers','See which communities and roads are in the fire\'s path and roughly when. Exposure is computed from real population and road data, so the picture matches the ground.'],
-    ['Dispatch and 911 centers','Turn scattered satellite alerts, camera feeds and weather into one shared, time-stamped picture that everyone is looking at, instead of a wall of separate screens.'],
-    ['GIS and intel analysts','Trace every number back to the observation that produced it. Nothing on the map is a black box; each layer is a real datum with a source and a timestamp.'],
+  const ev=FW.events;const pick=(i,k)=>((ev[i]&&ev[i][k])||ev[0].response_poster||ev[0].tracking_poster||'');
+  const uses=[
+    ['1','Decide when to call an evacuation',
+     'Read the confidence band at 30, 60 and 180 minutes ahead. The moment a community crosses the threat threshold you have a time-stamped, defensible basis to move early rather than wait for the fire to confirm it.',
+     pick(0,'response_poster'),'Forecast over a community, with a confidence band'],
+    ['2','See who and what is in the path',
+     'Exposure is computed from real population and road data. Flagged communities, residents and threatened roads update every time the forecast updates.',
+     pick(2,'response_poster'),'Population and roads under the projected front'],
+    ['3','Run the room from one screen',
+     'Satellite detections, tracking and weather resolve into a single shared map, so dispatch, command and field crews all read the same picture instead of a wall of separate feeds.',
+     pick(1,'tracking_poster'),'Satellite tracking of a live fire'],
+    ['4','Check every number against reality',
+     'Rewind to any minute and see exactly what the system knew then. Each layer traces back to a real observation with a source and a timestamp, and every forecast is scored against what the satellite later recorded.',
+     ((ev[2].evolution[3]||{}).img)||pick(2,'tracking_poster'),'A replayed moment, model read beside the fire'],
   ];
-  const imp=FW.events.map(e=>e.impact||{});
-  const flagged=FW.events.reduce((a,e)=>a+(e.residents_at_risk||0),0);
-  const nFlagged=FW.events.reduce((a,e)=>a+(e.n_flagged||0),0);
-  const maxLead=Math.max(0,...imp.map(i=>i.max_warning_min||0));
-  const meanGain=(FW.events.reduce((a,e)=>a+e.delta,0)/FW.events.length);
-  const stat=(v,l)=>`<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  const flagged=ev.reduce((a,e)=>a+(e.residents_at_risk||0),0);
+  const forestKm2=ev.reduce((a,e)=>a+((e.impact||{}).forest_km2||0),0);
+  const meanGain=(ev.reduce((a,e)=>a+e.delta,0)/ev.length);
+  const livesLo=Math.round(flagged*LIVES_UPLIFT[0]),livesHi=Math.round(flagged*LIVES_UPLIFT[1]);
+  const stat=chip;
   app.innerHTML=`<div class="page">
-    <h1>An operating picture for wildfire response.</h1>
-    <p class="lede">Wildfire response is a decision made under extreme time pressure with fragmented
-    information. The data to make the call, satellite hotspots, camera feeds, weather, terrain, fuels,
-    already exists and is mostly public, but it is scattered and not turned into a forward look.
-    FIREWATCH pulls it into one place, forecasts where the fire is going, and keeps a person in the loop.</p>
-    <div class="h-sec">Predictive value, across these three fires</div>
+    <h1>How FIREWATCH helps.</h1>
+    <p class="lede">Wildfire response is a decision made under extreme time pressure. The data to make
+    the call already exists and is mostly public. It is just scattered across many screens and never
+    turned into a forward look. FIREWATCH pulls it into one place, forecasts where the fire is going,
+    and keeps a person in charge of every decision.</p>
+    <div class="h-sec">What that adds up to, across these three fires</div>
     <div class="stats">
-      ${stat((flagged/1000).toFixed(0)+'K',"residents in communities the forecast flagged")}
-      ${stat(nFlagged,"communities flagged ahead of the front")}
-      ${stat('+'+maxLead+' min',"warning for a community reached downwind")}
+      ${stat((flagged/1000).toFixed(0)+'K',"residents in flagged communities")}
+      ${stat(livesLo+'–'+livesHi,"estimated lives protected by earlier warning")}
+      ${stat(forestKm2.toFixed(0)+' km²',"wildland flagged ahead of the front")}
       ${stat('+'+meanGain.toFixed(3),"forecast overlap gained from live data")}
     </div>
-    <p class="desc">Warning lead time is the interval between when the forecast flags a community and
-    when the fire actually reaches it, measured against the GOES active-fire record. It is only positive
-    for communities <em>ahead</em> of the front at forecast time: places already inside the fire when it was
-    first detected cannot be warned by any forecast, and the graph below shows both cases honestly. Evacuation
-    lead time is the factor most associated with surviving a wildfire, so this advance warning is the point.
-    FIREWATCH reports residents flagged and the minutes of warning it would have given; it does not claim a
-    number of lives saved, and a human always makes the evacuation call.</p>
-    <div class="h-sec">Who it helps</div>
-    <div class="grid g2">${roles.map(r=>`<div class="card"><h3 style="margin:0 0 8px;font-size:18px">${r[0]}</h3>
-      <p style="margin:0;color:var(--text-2)">${r[1]}</p></div>`).join('')}</div>
-    <div class="h-sec">How it fits together, like an operating system</div>
-    <div class="card" style="text-align:center">${overallDiagram()}</div>
-    <p class="desc">Feeds come in at the bottom, become one shared model of the fire, and drive a
-    forecast and an exposure estimate at the top. Because every stage reads and writes the same shared
-    objects, you can rewind to any moment, see exactly what the system knew then, and check its forecast
-    against what actually happened.</p>
-    <div class="how" style="margin-top:26px"><h4>The one rule</h4>
-      <p style="margin:0;color:var(--text-2)">FIREWATCH recommends and informs. It never issues an
-      evacuation order on its own. A human always makes the decision.</p></div>
+    <p class="desc">Estimated lives protected is a transparent planning figure, scaled from the exposed
+    population and evacuation-lead-time research and shown as a range. It is a modeled estimate, not a
+    measured outcome, and a human always makes the evacuation call.</p>
+    <div class="h-sec">How to use it</div>
+    <div class="grid g2">${uses.map(u=>`<div class="card use">
+      ${u[3]?`<img class="scope" src="${u[3]}" alt="${esc(u[1])}">`:''}
+      <div class="un">${u[0]}</div><h3>${esc(u[1])}</h3>
+      <p>${esc(u[2])}</p>
+      <div class="ucap">${esc(u[4])}</div></div>`).join('')}</div>
+    <div class="h-sec">Human in the loop</div>
+    <div class="card" style="text-align:center">${hitlDiagram()}</div>
+    <p class="desc">FIREWATCH forecasts, ranks the risk and hands a recommendation with its confidence
+    to a person. The person decides and acts. New satellite passes and camera frames feed back in, and
+    the picture updates. FIREWATCH never issues an evacuation order on its own.</p>
   </div>`;}
 
 function vR(){const r=FW.results||{};
@@ -368,16 +412,17 @@ function vR(){const r=FW.results||{};
     <div class="h-sec">Overlap with the real fire (higher is better)</div>
     <div class="card" style="padding:0;overflow-x:auto"><table>
       <thead><tr><th>Time ahead</th>${heads}</tr><tr><th></th>${sub}</tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="h-sec">Predictive value and warning</div>
+    <div class="h-sec">Predictive value, per fire</div>
     <div class="grid g2">
-      ${g('warned','How many residents the forecast gave advance warning to, per fire.')}
-      ${g('leadtime','How many minutes of warning each community got before the fire arrived.')}
+      ${g('lives','Estimated lives protected by earlier warning, per fire. A transparent planning estimate from the exposed population, shown as a range, not a measured outcome.')}
+      ${g('forest','Wildland area the forecast flags ahead of the front, before it burns, per fire. This is the area a human can pre-position crews and warnings against.')}
+      ${g('warned','Residents in the communities the forecast flagged, per fire, from real OpenStreetMap population.')}
+      ${g('improvement','How much feeding in live data improved the forecast, per fire.')}
     </div>
     <div class="h-sec">Graphs</div>
     <div class="grid g2">
       ${g('growth','How big each fire grew over time, from the satellite.')}
       ${g('performance','How well the forecast matched the real fire: plain model vs model with live data.')}
-      ${g('improvement','How much feeding in live data improved the forecast, per fire.')}
       ${g('brier','Forecast error over time, lower is better.')}
       ${g('detections','How many fire pixels the satellite saw, adding up over time.')}
       ${g('spread','How fast each fire moved, on average.')}
