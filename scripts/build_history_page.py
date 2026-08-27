@@ -505,6 +505,8 @@ function vOnt(){const evs=FW.events;
     <div class="oseg-row">${sel}</div>
     <div class="h-sec">The object and link graph for ${esc(e.name)}</div>
     <div class="card" style="text-align:center">${ontologyGraph(e)}</div>
+    ${e.still?`<div class="card" style="margin-top:22px"><img class="scope" style="border:none" src="${e.still}">
+      <p class="note">The same objects on the map: the Fire, its GOES observations (orange), the tracked front (cyan) and the forecast, over real terrain. The graph above is not a diagram of an idea, it is this incident.</p></div>`:''}
     <div class="grid g2" style="margin-top:22px">
       <div><div class="h-sec" style="margin-top:0">Objects in this incident</div>
         <div class="stats" style="grid-template-columns:1fr 1fr">
