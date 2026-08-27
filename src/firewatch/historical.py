@@ -874,7 +874,7 @@ def _calibrate_coverage(results: list[dict], target: float = 0.90) -> None:
         r["region_area_cal_km2"] = round(float(areas[id(r)][idx]), 1)
 
 
-def run_all(keys=("park", "palisades", "eaton")) -> list[dict]:
+def run_all(keys=("park", "palisades", "eaton", "davis", "gray")) -> list[dict]:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     out = []
     for k in keys:
