@@ -547,6 +547,8 @@ function vRetro(){const evs=FW.events;const av=a=>a.length?a.reduce((x,y)=>x+y,0
     GOES-18 detection under strict causal masking: no forecast at time t uses any observation after t.
     We assimilate the first few hours, then score the forecast against what the satellite actually
     recorded, and read off how much earlier the model flags each community than the fire reaches it.</p>
+    ${evs[0]&&evs[0].still?`<div class="card" style="margin-top:8px"><img class="scope" style="border:none" src="${evs[0].still}">
+      <p class="note">A replayed fire: GOES active-fire detections (orange), the model's tracked front (cyan) and its forecast (dashed) over real terrain. The forecast is scored against the satellite's later record.</p></div>`:''}
     <div class="h-sec">Warning lead time, community by community</div>
     <p class="desc" style="margin-top:0">For every community the fire reached after forecast issue, the
     interval between when the forecast first flagged it and when the fire actually arrived. Positive means
@@ -572,6 +574,8 @@ function vRetro(){const evs=FW.events;const av=a=>a.length?a.reduce((x,y)=>x+y,0
     calibrating the region level on held-out fires lifts that to about ${(covCal*100).toFixed(0)}%. The
     residual gap is largely irreducible: at 2 km GOES resolution the real perimeter is patchier than any
     smooth ensemble. Both numbers are reported, nothing is hidden.</p>
+    ${FW.results&&FW.results.coverage_cal?`<div class="card"><img class="scope" style="border:none" src="${FW.results.coverage_cal}">
+      <p class="note">The raw ensemble 90% region (grey) against the calibrated one (blue), per fire, versus the 0.90 target.</p></div>`:''}
     <div class="how" style="margin-top:22px"><h4>Why this is a fair test</h4><ul>
       <li>Causal masking: no forecast uses future observations, and the scored window is held out.</li>
       <li>The assimilation-off arm is a real baseline the on arm has to beat.</li>
