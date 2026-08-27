@@ -684,33 +684,55 @@ def _impact(bundle, cfg, threshold=0.25, threat_km=4.0) -> dict:
     ens = opf.ensemble
     buf_deg = threat_km * 1000.0 / 111_320.0
     rows, warned, person_min = [], 0, 0.0
+    brief, tp, fp, fn = [], 0, 0, 0  # decision-quality: flagged vs actually-burned (GOES truth)
     for z in bundle.zones:
         buf = z.geom().centroid.buffer(buf_deg)
         m = cells_in_geom(bundle.grid, buf)
         if not m.any():
             continue
         dist = arrival_distribution(ens, m)
+        p_reached = dist.prob_burned_by(span)
         flag = None
         for h in np.arange(0, span + 1, 6):
             if dist.prob_burned_by(h) >= threshold:
                 flag = float(h)
                 break
-        if flag is None:
-            continue
+        flagged = flag is not None
         # when the fire actually reaches the community, from the GOES truth (minutes after issue)
         tr = bundle.truth_arrival[m]
         actual = float(np.nanmin(tr[np.isfinite(tr)])) - issue_min if np.isfinite(tr).any() else None
-        warning = round(actual - flag) if actual is not None else None
+        reached = actual is not None
         pop = int(getattr(z, "population", 0) or 0)
-        if warning is not None and warning > 0:
-            warned += pop
-            person_min += pop * warning
-        rows.append({"zone": z.name, "residents": pop, "flag_min": round(flag),
-                     "actual_min": round(actual) if actual is not None else None,
-                     "warning_min": warning})
+        # decision-quality tallies: did the forecast flag the communities that actually burned?
+        if flagged and reached:
+            tp += 1
+        elif flagged and not reached:
+            fp += 1
+        elif reached and not flagged:
+            fn += 1
+        # projected ETA (median + 80% window) in minutes since first detection, for the decision brief
+        eta = dist.quantile_minutes(0.5)
+        eta_lo, eta_hi = dist.quantile_minutes(0.1), dist.quantile_minutes(0.9)
+        if flagged:
+            brief.append({"zone": z.name, "residents": pop, "p_reached": round(float(p_reached), 2),
+                          "eta_med": round(eta + issue_min) if eta is not None else None,
+                          "eta_lo": round(eta_lo + issue_min) if eta_lo is not None else None,
+                          "eta_hi": round(eta_hi + issue_min) if eta_hi is not None else None,
+                          "reached": reached})
+        if flagged:
+            warning = round(actual - flag) if actual is not None else None
+            if warning is not None and warning > 0:
+                warned += pop
+                person_min += pop * warning
+            rows.append({"zone": z.name, "residents": pop, "flag_min": round(flag),
+                         "actual_min": round(actual) if actual is not None else None,
+                         "warning_min": warning})
     leads = [r["warning_min"] for r in rows if r.get("warning_min") and r["warning_min"] > 0]
     measured = [r for r in rows if r.get("warning_min") is not None]
     measured.sort(key=lambda r: -r["warning_min"])
+    brief.sort(key=lambda r: (r["eta_med"] is None, r["eta_med"] if r["eta_med"] is not None else 1e9))
+    precision = round(tp / (tp + fp), 2) if (tp + fp) else None
+    recall = round(tp / (tp + fn), 2) if (tp + fn) else None
     # wildland area the forecast flags ahead of the front, the advance-warning footprint a human
     # can pre-position against before it burns: cells the forecast projects the fire into (prob >=
     # threshold) that are burnable vegetation (fuel != 0) and not already burned at issue.
@@ -724,7 +746,11 @@ def _impact(bundle, cfg, threshold=0.25, threat_km=4.0) -> dict:
             "residents_warned": warned, "mean_warning_min": round(float(np.mean(leads)), 1) if leads else 0,
             "max_warning_min": max(leads) if leads else 0,
             "person_minutes_warning": round(person_min),
-            "forest_m2": round(forest_m2), "forest_km2": round(forest_m2 / 1e6, 1)}
+            "forest_m2": round(forest_m2), "forest_km2": round(forest_m2 / 1e6, 1),
+            # decision layer: the reconstructed decision brief at issue + verification vs GOES truth
+            "brief": brief[:14], "issue_min": issue_min,
+            "decision": {"flagged": tp + fp, "flagged_correct": tp, "false_alarms": fp,
+                         "burned": tp + fn, "missed": fn, "precision": precision, "recall": recall}}
 
 
 def run_historical(key: str, members: int = 64) -> dict:
