@@ -1,6 +1,6 @@
-*Part of the FIREWATCH spec — see [`../CLAUDE.md`](../CLAUDE.md) and [`../context.md`](../context.md).*
+*Part of the FIREWATCH spec, see [`../CLAUDE.md`](../CLAUDE.md) and [`../context.md`](../context.md).*
 
-# FIREWATCH — Architecture
+# FIREWATCH, Architecture
 
 Companion to `PRD.md` (requirements) and `ONTOLOGY.md` (the object model). This doc is the "how it fits together." Module boundaries here map 1:1 to `src/firewatch/`.
 

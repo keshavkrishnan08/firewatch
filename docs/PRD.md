@@ -1,4 +1,4 @@
-# FIREWATCH — Product Requirements (PRD)
+# FIREWATCH, Product Requirements (PRD)
 
 **Status:** Draft v1.0 · **Last updated:** 2026-08-25
 **Companion docs:** `LITERATURE_REVIEW.md`, `ARCHITECTURE.md`, `ONTOLOGY.md`, `DATA_SOURCES.md`, `ROADMAP.md`, `EVALUATION.md`, `REFERENCES.md`
@@ -11,13 +11,13 @@
 
 > An open-source, real-time wildfire common operating picture that fuses camera, satellite,
 > weather, terrain, and fuels data into a continuously self-correcting probabilistic spread
-> forecast and a human-in-the-loop decision layer — validated by retrospective replay of real fires.
+> forecast and a human-in-the-loop decision layer, validated by retrospective replay of real fires.
 
 ### 1.2 The problem
 
 Wildfire response is a decision problem under extreme time pressure and fragmented information.
 Incident commanders and emergency managers juggle satellite hotspot emails, a wall of tower-camera
-feeds, spot weather forecasts, paper/GIS fuel maps, and radio traffic — and must decide *who to
+feeds, spot weather forecasts, paper/GIS fuel maps, and radio traffic, and must decide *who to
 evacuate, when, and by which route*, and *where to put crews*, hours before the fire arrives. The
 data to make these calls **exists and is largely public**, but it is not integrated, not projected
 into a shared picture, not turned into a forward-looking probabilistic forecast, and not tied to the
@@ -29,7 +29,7 @@ Two technical gaps compound this (full treatment in `LITERATURE_REVIEW.md`):
   flame detectors and single-shot next-day spread predictors, but thin on *real-time, observation-
   assimilating, uncertainty-calibrated* forecasting delivered as accessible open software.
 - **Assimilation is trapped in heavyweight simulators.** The methods that continuously correct a
-  fire forecast from live observations (ensemble/particle filters over coupled atmosphere–fire
+  fire forecast from live observations (ensemble/particle filters over coupled atmosphere-fire
   models) require HPC and expert operation, so they don't reach the accessible ML/operational world.
 
 ### 1.3 Why this shape (Palantir fit)
@@ -69,7 +69,7 @@ IC-facing decision UI is the M5 payoff.
 - **G2.** Perceive: detect + segment smoke/flame on tower-camera imagery.
 - **G3.** **Georeference** camera-observed smoke to a lat/lon front with an uncertainty region. *(novelty 1)*
 - **G4.** **Assimilate** GOES/VIIRS/camera observations into a probabilistic spread forecast that measurably improves over a no-assimilation baseline. *(novelty 2 / research core)*
-- **G5.** Calibrated uncertainty (reliability diagram, Brier/CRPS) — not point forecasts.
+- **G5.** Calibrated uncertainty (reliability diagram, Brier/CRPS), not point forecasts.
 - **G6.** Decision layer: risk-to-population, evacuation lead-time, egress-route threat.
 - **G7.** Retrospective validation on ≥1 real named fire showing earlier/better warning than baseline.
 - **G8.** Fully reproducible, open-source, one-command event replay.
@@ -78,7 +78,7 @@ IC-facing decision UI is the M5 payoff.
 
 - **N1.** Autonomous action (issuing orders). Human-in-the-loop only.
 - **N2.** Novel detector architecture. Use off-the-shelf YOLO/RT-DETR/SAM2.
-- **N3.** 3D digital twin, cross-region domain adaptation as marquee results — **stretch only**.
+- **N3.** 3D digital twin, cross-region domain adaptation as marquee results, **stretch only**.
 - **N4.** Global coverage. Focus: California, extensible later.
 - **N5.** Beating a full operational simulator (WRF-SFIRE) on physical fidelity. The bar is *usefulness + calibration + accessibility*.
 
@@ -88,9 +88,9 @@ IC-facing decision UI is the M5 payoff.
 
 Three-pane COP board:
 
-1. **Observe** — live/replay camera with detector boxes + SAM2 plume mask; source toggles.
-2. **Map** — observed perimeter, georeferenced camera front, probabilistic forecast bands (+30/+60/+180 min), wind vector, threatened assets, egress routes colored by threat time.
-3. **Decide** — ranked panel: zones by evacuation urgency (lead-time + confidence), egress routes by time-to-threat, suggested staging locations; every item links back to the evidence in the ontology. Read-only NL query box (stretch).
+1. **Observe**, live/replay camera with detector boxes + SAM2 plume mask; source toggles.
+2. **Map**, observed perimeter, georeferenced camera front, probabilistic forecast bands (+30/+60/+180 min), wind vector, threatened assets, egress routes colored by threat time.
+3. **Decide**, ranked panel: zones by evacuation urgency (lead-time + confidence), egress routes by time-to-threat, suggested staging locations; every item links back to the evidence in the ontology. Read-only NL query box (stretch).
 
 A horizontal **time scrubber** (−history … now … +forecast) drives all three panes together.
 
@@ -104,7 +104,7 @@ Requirements are labeled `FR-<area>-<n>` and mapped to milestones in `ROADMAP.md
 
 - **FR-ING-1** Each feed has a connector exposing `fetch(bbox, t0, t1) -> list[Observation]`.
 - **FR-ING-2** Feeds (v1): NASA FIRMS (VIIRS/MODIS active fire), GOES ABI Fire Detection & Characterization (~5-min cadence), NOAA HRRR (10-m wind, RH, temp), USGS 3DEP DEM, LANDFIRE (fuel model / canopy), NIFC/WFIGS (official perimeters, ground truth), ALERTCalifornia/ALERTWildfire camera tiles + station metadata.
-- **FR-ING-3** Every `Observation` carries provenance {source, product, retrieved_at, native_resolution, reported_uncertainty} — required downstream for assimilation weighting.
+- **FR-ING-3** Every `Observation` carries provenance {source, product, retrieved_at, native_resolution, reported_uncertainty}, required downstream for assimilation weighting.
 - **FR-ING-4** Replay mode: given an event id + time range, fetch/cache the exact historical snapshots so any run is reproducible offline.
 - **FR-ING-5** Graceful degradation: missing/late feeds must not crash the picture; the forecast widens its uncertainty instead.
 
@@ -115,7 +115,7 @@ Requirements are labeled `FR-<area>-<n>` and mapped to milestones in `ROADMAP.md
 - **FR-PER-3** Per-frame smoke-state features: mask area, centroid, bearing from camera, growth rate, plume-tilt (a wind proxy), confidence.
 - **FR-PER-4** Detector runs on FIgLib/FLAME/AusSmoke-style data for training/eval; report time-to-detection vs. single-frame baseline.
 
-### 5.3 Georeferencing (`perception/georeference.py`) — **novelty 1**
+### 5.3 Georeferencing (`perception/georeference.py`), **novelty 1**
 
 - **FR-GEO-1** Given a camera pose (lat/lon/elev, pan/tilt/FOV) and a smoke mask, cast rays from the camera through mask pixels and intersect them with the DEM to estimate ground coordinates of the plume base / fire front.
 - **FR-GEO-2** Output a **georeferenced front geometry + uncertainty region** (cone from pose error, tilt error, and plume-base ambiguity), not a single point.
@@ -127,15 +127,15 @@ Requirements are labeled `FR-<area>-<n>` and mapped to milestones in `ROADMAP.md
 
 - **FR-ONT-1** Implement the object/link/action model in `ONTOLOGY.md` as the single source of truth; all modules read/write objects, never raw feed payloads.
 - **FR-ONT-2** Objects are versioned/time-stamped so the time scrubber can reconstruct state at any past instant (and forecast future instants).
-- **FR-ONT-3** Actions (e.g., "recommend evacuation for Zone X") are logged with the evidence (object ids) that justified them — auditability.
+- **FR-ONT-3** Actions (e.g., "recommend evacuation for Zone X") are logged with the evidence (object ids) that justified them, auditability.
 
-### 5.5 Forecast + assimilation (`forecast/`) — **research core**
+### 5.5 Forecast + assimilation (`forecast/`), **research core**
 
 - **FR-FC-1** Baseline spread model: level-set / cellular-automaton front propagation driven by Rothermel-style rate-of-spread from fuel + slope + wind (a transparent physical prior).
 - **FR-FC-2** Ensemble: run N members with perturbed inputs (wind, fuel moisture, ignition, ROS params) to represent forecast uncertainty.
 - **FR-FC-3** **Assimilation loop:** at each observation time, update the ensemble against incoming observations (GOES/VIIRS hotspots, georeferenced camera front, official perimeter when available) via an ensemble/particle filter with a matching scheme for perimeter/front observations (cf. morphing-EnKF ideas), weighted by each observation's provenance uncertainty.
 - **FR-FC-4** Output at each horizon (+15/+30/+60/+180 min): a **per-cell burn-probability field** + expected perimeter + a stated prediction region (e.g., 90%).
-- **FR-FC-5** Optional learned surrogate: a small NN emulator trained on WildfireSpreadTS/Next-Day-Wildfire-Spread to speed up / improve the prior — but assimilation and calibration remain the contribution.
+- **FR-FC-5** Optional learned surrogate: a small NN emulator trained on WildfireSpreadTS/Next-Day-Wildfire-Spread to speed up / improve the prior, but assimilation and calibration remain the contribution.
 - **FR-FC-6** The forecast must **demonstrably improve** as observations arrive (ablation: assimilation ON vs OFF), and must be **calibrated**.
 
 ### 5.6 Decision layer (`decision/`)
@@ -184,14 +184,14 @@ Objects: **Fire**, **FirePerimeter (t)**, **Observation**, **Camera**, **Weather
 
 ---
 
-## 9. Milestones (summary — full criteria in `ROADMAP.md`)
+## 9. Milestones (summary, full criteria in `ROADMAP.md`)
 
 M1 Live COP · M2 Perception · M3 Georeferencing · M4 Assimilating forecast · M5 Decision +
 retrospective. Each is independently demoable.
 
 ---
 
-## 10. Risks & mitigations (summary — full table in `ROADMAP.md`)
+## 10. Risks & mitigations (summary, full table in `ROADMAP.md`)
 
 - **Camera pose imprecise** → skyline-to-DEM tilt refinement (FR-GEO-3); degrade to bearing-only.
 - **Assimilation instability / spurious fires** → regularization + morphing/matching; particle-filter fallback; cap ensemble spread.
@@ -221,7 +221,7 @@ See `CLAUDE.md` (Tech stack) and `requirements.txt`. Everything free/open; singl
 - **Sharpness-given-calibration:** area of the 90% region shrinks as observations accumulate.
 
 **Decision (the "moved-the-needle" metric)**
-- On the retrospective fire: **evacuation lead-time delta** — how much earlier FIREWATCH would have flagged the threatened zone at a fixed confidence, vs. the actual timeline / vs. the no-assimilation baseline. This single number is the application's centerpiece.
+- On the retrospective fire: **evacuation lead-time delta**, how much earlier FIREWATCH would have flagged the threatened zone at a fixed confidence, vs. the actual timeline / vs. the no-assimilation baseline. This single number is the application's centerpiece.
 
 **Engineering**
 - One-command reproducible replay; cycle latency ≤ cadence (NFR-1); all feeds free.
@@ -231,5 +231,5 @@ See `CLAUDE.md` (Tech stack) and `requirements.txt`. Everything free/open; singl
 ## 13. Open questions
 
 - Which retrospective fire(s)? Need good public camera coverage **and** high-quality perimeter time series. Pick during M1 when data availability is known.
-- Learned surrogate vs. pure physical prior for FR-FC-1 — decide empirically at M4; physical prior first.
-- Perimeter-observation matching scheme — evaluate morphing-EnKF-style correction vs. simpler front-distance likelihood.
+- Learned surrogate vs. pure physical prior for FR-FC-1, decide empirically at M4; physical prior first.
+- Perimeter-observation matching scheme, evaluate morphing-EnKF-style correction vs. simpler front-distance likelihood.

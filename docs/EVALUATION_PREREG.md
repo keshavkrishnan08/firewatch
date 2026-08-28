@@ -1,4 +1,4 @@
-# Retrospective pre-registration — 5 real fires (GOES-18 era)
+# Retrospective pre-registration, 5 real fires (GOES-18 era)
 
 *The pinned record is the version-controlled `retrospective.RETRO_REGISTRY` and the git history;
 this file is a human-readable snapshot. Ground truth = GOES-18 ABI active-fire progression (real,
@@ -17,12 +17,12 @@ scored window is held out beyond the assimilation window.*
 
 ## Fixed protocol (same for every fire)
 
-- **Skill:** perimeter IoU, Sørensen–Dice, burn Brier score, per-horizon.
+- **Skill:** perimeter IoU, Sørensen-Dice, burn Brier score, per-horizon.
 - **Coverage:** empirical coverage of the 90% credible region vs GOES truth, reported **raw** and
   **calibrated**. Calibration = a fast-tail ensemble spread mixture (tight core preserves the p≥0.5
   point forecast) plus **leave-one-out** region-level calibration across fires. Never tuned to the
   fire being scored; both numbers published.
-- **Ablation baseline:** assimilation OFF (physical prior, no obs) — the ON arm must beat it.
+- **Ablation baseline:** assimilation OFF (physical prior, no obs), the ON arm must beat it.
 - **Warning lead time:** for each community the fire reaches after forecast issue, the interval
   between the forecast first flagging it and the fire's GOES-observed arrival (non-positive where the
   community is already inside the fire at issue, reported honestly).
