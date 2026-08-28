@@ -53,7 +53,7 @@ class Ensemble:
         #: optional already-burned mask (forecast an ongoing fire forward from its current perimeter)
         self.initial_mask = initial_mask
 
-    # ── construction ────────────────────────────────────────────────────────────
+    # construction
 
     @classmethod
     def generate(
@@ -93,7 +93,7 @@ class Ensemble:
             members.append(Member(params=params, ignition_lonlat=(float(lon), float(lat))))
         return cls(grid, members, cfg, initial_mask=initial_mask)
 
-    # ── running ─────────────────────────────────────────────────────────────────
+    # running
 
     def run(self, surrogate=None) -> Ensemble:
         """Solve each member's arrival field. If a learned `surrogate` is given, use it (fast prior)
@@ -118,7 +118,7 @@ class Ensemble:
         w = self._weights()
         return float(1.0 / np.sum(w**2))
 
-    # ── products ────────────────────────────────────────────────────────────────
+    # products
 
     def burn_probability(self, horizon_min: float) -> np.ndarray:
         """Weighted P(cell burned by horizon) in [0, 1]."""

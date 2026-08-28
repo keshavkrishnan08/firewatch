@@ -95,7 +95,7 @@ def coverage(prob_field: np.ndarray, truth_mask: np.ndarray, levels=(0.5, 0.8, 0
     return out
 
 
-# ── recalibration maps ───────────────────────────────────────────────────────
+# recalibration maps
 
 
 def _logit(p, eps=1e-6):

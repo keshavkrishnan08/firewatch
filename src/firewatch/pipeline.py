@@ -111,7 +111,7 @@ def run_pipeline(
     return result
 
 
-# ── multi-issue-time evolution (shared by sharpening + lead-time) ────────────────
+# multi-issue-time evolution (shared by sharpening + lead-time)
 
 
 def _obs_batches(bundle: EventBundle):
@@ -206,7 +206,7 @@ def lead_time_analysis(bundle: EventBundle, issue_offsets_min: list[int], *, hor
     return out
 
 
-# ── COP JSON ─────────────────────────────────────────────────────────────────
+# COP JSON
 
 
 def build_cop_json(bundle, on: ForecastResult, off: ForecastResult, evacs, egress, staging, risk,

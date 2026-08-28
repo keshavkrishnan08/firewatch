@@ -28,7 +28,7 @@ class DEM:
         self._x0 = -(self.nx - 1) / 2.0 * self.cell_m
         self._y0 = -(self.ny - 1) / 2.0 * self.cell_m
 
-    # ── sampling ─────────────────────────────────────────────────────────────────
+    # sampling
 
     def sample_local(self, x: float, y: float) -> float:
         """Bilinearly sample elevation at local meters (x east, y north). Edge-clamped."""
@@ -66,7 +66,7 @@ class DEM:
     def max_extent_m(self) -> float:
         return max(self.nx, self.ny) * self.cell_m
 
-    # ── builders ─────────────────────────────────────────────────────────────────
+    # builders
 
     @classmethod
     def from_grid(cls, grid) -> DEM:

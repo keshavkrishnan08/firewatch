@@ -34,7 +34,7 @@ class FireGrid:
         self._xs = (np.arange(self.nx) - (self.nx - 1) / 2.0) * self.cell_m
         self._ys = (np.arange(self.ny) - (self.ny - 1) / 2.0) * self.cell_m
 
-    # ── coordinate transforms ───────────────────────────────────────────────────
+    # coordinate transforms
 
     def cell_to_local(self, i: int, j: int) -> tuple[float, float]:
         """(row i, col j) -> (x, y) meters."""
@@ -54,14 +54,14 @@ class FireGrid:
     def in_bounds(self, i: int, j: int) -> bool:
         return 0 <= i < self.ny and 0 <= j < self.nx
 
-    # ── terrain derivatives ─────────────────────────────────────────────────────
+    # terrain derivatives
 
     def slope_gradient(self) -> tuple[np.ndarray, np.ndarray]:
         """Uphill gradient (dz/dx east, dz/dy north) as rise/run fractions per cell."""
         gy, gx = np.gradient(self.elevation, self.cell_m)
         return gx, gy  # east, north components (uphill = +grad)
 
-    # ── mask -> geometry ────────────────────────────────────────────────────────
+    # mask -> geometry
 
     def mask_to_polygon(self, mask: np.ndarray, smooth: bool = True) -> BaseGeometry | None:
         """Union of burned cells -> a lon/lat polygon (or None if empty)."""
@@ -103,7 +103,7 @@ def _square(x0: float, y0: float, x1: float, y1: float):
     return Polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
 
 
-# ── synthetic builder (offline demo; no network / no keys) ───────────────────────
+# synthetic builder (offline demo; no network / no keys)
 
 
 def synthetic_grid(

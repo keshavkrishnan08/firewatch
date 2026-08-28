@@ -468,7 +468,7 @@ function vR(){const r=FW.results||{};
       ${g('calibration','Whether the model probabilities are honest, before and after calibration.')}
     </div></div>`;}
 
-// ── Ontology (Palantir-style object/link/action graph for one fire) ──
+// Ontology tab: the object/link/action graph for one fire
 function ontologyGraph(e){
   const nObs=e.observations.length,nComm=e.n_flagged||0,nH=e.skill.length;
   const W=920,H=430;
@@ -531,7 +531,7 @@ function vOnt(){const evs=FW.events;
         <p class="note">Showing ${Math.min(10,e.observations.length)} of ${e.observations.length} assimilated observations.</p></div>
     </div></div>`;}
 
-// ── Retrospective (M5): causal replay of a real named fire, lead-time + calibration ──
+// Retrospective tab: causal replay, lead-time and calibration
 function vRetro(){const evs=FW.events;const av=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
   const covRaw=av(evs.map(e=>e.coverage90_raw||0)),covCal=av(evs.map(e=>e.coverage90_cal||0));
   const gain=av(evs.map(e=>e.delta||0));
@@ -585,7 +585,7 @@ function vRetro(){const evs=FW.events;const av=a=>a.length?a.reduce((x,y)=>x+y,0
       <li>Spread calibration is fit leave-one-out, so it is never tuned to the fire being scored.</li>
     </ul></div></div>`;}
 
-// ── Decision: the reconstructed incident-commander brief + verification vs truth ──
+// Decision tab: the commander brief, checked against what actually burned
 function vDec(){const evs=FW.events;const av=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
   // default to the fire with the most informative brief: distinct arrival times spread over the window
   // (dense urban fires reach their surrounding communities near-simultaneously, so their briefs flatten).
