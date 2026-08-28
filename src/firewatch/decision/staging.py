@@ -39,7 +39,7 @@ def suggest_staging(
         i, j = grid.lonlat_to_cell(lon, lat)
         prob_here = float(p[i, j])
         if prob_here > safe_prob:
-            continue  # inside the credible burn envelope — not safe to stage
+            continue  # inside the credible burn envelope, not safe to stage
         # ensure it stays safe: arrival distribution into a small disk around the point
         disk = Point(lon, lat).buffer(300.0 / 111_320.0)
         mask = cells_in_geom(grid, disk)

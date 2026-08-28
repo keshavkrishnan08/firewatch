@@ -1,9 +1,9 @@
-"""Fuels connector — real LANDFIRE fuel models, with a documented heuristic fallback (FR-ING-2).
+"""Fuels connector, real LANDFIRE fuel models, with a documented heuristic fallback (FR-ING-2).
 
 Primary path pulls a LANDFIRE fire-behavior fuel-model raster (Scott & Burgan 40 / Anderson 13) for
 the fire's bbox from the LANDFIRE Product Service (LFPS async geoprocessing), reprojects to the local
 grid, and maps the codes onto the 13 standard Anderson models the Rothermel core uses. If LFPS is
-slow/unreachable, it falls back to a transparent elevation/slope heuristic — clearly labeled, so a
+slow/unreachable, it falls back to a transparent elevation/slope heuristic, clearly labeled, so a
 forecast always runs. Provenance records which path was used (honesty; NFR-4).
 """
 from __future__ import annotations
@@ -178,17 +178,17 @@ def fetch_fuel(dem: DEM, event_id: str = "event", seed: int = 3, bbox: BBox | No
             log.warning("LANDFIRE fetch failed (%s)", e)
             fuel = None
         if fuel is not None and (fuel > 0).mean() > 0.05:
-            log.info("fuels: real LANDFIRE fuel models — present: %s", sorted(set(np.unique(fuel).tolist())))
+            log.info("fuels: real LANDFIRE fuel models, present: %s", sorted(set(np.unique(fuel).tolist())))
             return {"fuel": fuel, "moisture": 0.07, "source": "LANDFIRE FBFM (Anderson-13 mapped)"}
 
     # real satellite land cover (reliable, keyless)
     try:
         wc = fetch_worldcover(dem, event_id=event_id)
     except Exception as e:
-        log.warning("WorldCover fetch failed (%s) — using heuristic", e)
+        log.warning("WorldCover fetch failed (%s), using heuristic", e)
         wc = None
     if wc is not None and (wc > 0).mean() > 0.05:
-        log.info("fuels: real ESA WorldCover land-cover fuels — present: %s", sorted(set(np.unique(wc).tolist())))
+        log.info("fuels: real ESA WorldCover land-cover fuels, present: %s", sorted(set(np.unique(wc).tolist())))
         return {"fuel": wc, "moisture": 0.07, "source": "ESA WorldCover 10m land cover (Anderson-13 mapped)"}
 
     # ── heuristic fallback (elevation/slope) ──────────────────────────────────
@@ -204,5 +204,5 @@ def fetch_fuel(dem: DEM, event_id: str = "event", seed: int = 3, bbox: BBox | No
     fuel[slope > 0.6] = 4
     verylow = elev < np.percentile(elev, 3)
     fuel[verylow & (rng.random(elev.shape) < 0.5)] = 0
-    log.info("fuels: heuristic fuel field (LANDFIRE unavailable) — models: %s", sorted(set(np.unique(fuel).tolist())))
+    log.info("fuels: heuristic fuel field (LANDFIRE unavailable), models: %s", sorted(set(np.unique(fuel).tolist())))
     return {"fuel": fuel, "moisture": 0.07, "source": "estimated (elevation/slope heuristic; LANDFIRE unavailable)"}

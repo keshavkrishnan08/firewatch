@@ -2,7 +2,7 @@
 
 Every connector follows the same contract (FR-ING-1): `fetch(bbox, t0, t1) -> list[Observation |
 Layer]`, each carrying provenance (FR-ING-3), cached per event under gitignored data/ (FR-ING-4),
-and failing soft — a connector that errors logs and yields nothing rather than crashing the picture
+and failing soft, a connector that errors logs and yields nothing rather than crashing the picture
 (FR-ING-5).
 """
 from __future__ import annotations

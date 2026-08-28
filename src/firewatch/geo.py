@@ -141,7 +141,7 @@ def iou(a: BaseGeometry | None, b: BaseGeometry | None) -> float:
 
 
 def dice(a: BaseGeometry | None, b: BaseGeometry | None) -> float:
-    """Sørensen–Dice coefficient of two polygons (0..1)."""
+    """Sørensen-Dice coefficient of two polygons (0..1)."""
     if a is None or b is None or a.is_empty or b.is_empty:
         return 0.0
     inter = a.intersection(b).area

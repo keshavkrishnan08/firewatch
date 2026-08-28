@@ -1,7 +1,7 @@
 """Decision-quality: did the forecast flag the communities that actually burned?
 
 Precision / recall of the threat flag against ground truth. This is the "does it change a decision
-correctly?" metric — separate from forecast IoU, and the thing an operator actually cares about.
+correctly?" metric, separate from forecast IoU, and the thing an operator actually cares about.
 """
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from collections.abc import Sequence
 def decision_metrics(flagged: Sequence[bool], reached: Sequence[bool]) -> dict:
     """Confusion of the threat flag vs whether the fire actually reached each community.
 
-    `flagged[i]` — the forecast crossed the threat threshold near community i.
-    `reached[i]` — the GOES truth later shows fire reaching community i within the window.
+    `flagged[i]`, the forecast crossed the threat threshold near community i.
+    `reached[i]`, the GOES truth later shows fire reaching community i within the window.
 
     Returns counts plus precision (of the flagged, how many burned) and recall (of the burned, how
     many were flagged). Precision/recall are None when their denominator is zero.

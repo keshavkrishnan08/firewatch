@@ -1,7 +1,7 @@
-"""Digital-elevation connector — real terrain from AWS Terrain Tiles (keyless).  [FR-ING-2]
+"""Digital-elevation connector, real terrain from AWS Terrain Tiles (keyless).  [FR-ING-2]
 
 Fetches Mapzen/Terrarium PNG tiles (AWS Open Data: elevation-tiles-prod), decodes elevation, and
-resamples into a local meter grid centered on the fire — the surface for both the ROS slope term and
+resamples into a local meter grid centered on the fire, the surface for both the ROS slope term and
 the georeferencing ray-cast (`perception/georeference.py`). Degrades to a flat DEM if unreachable.
 """
 from __future__ import annotations
@@ -54,7 +54,7 @@ def fetch_dem(center_lat: float, center_lon: float, half_extent_m: float = 12000
     x0, x1 = int(np.floor(tx.min())), int(np.floor(tx.max()))
     y0, y1 = int(np.floor(ty.min())), int(np.floor(ty.max()))
     if (x1 - x0 + 1) * (y1 - y0 + 1) > 64:
-        log.warning("DEM: tile span too large (%d) — lower zoom", (x1 - x0 + 1) * (y1 - y0 + 1))
+        log.warning("DEM: tile span too large (%d), lower zoom", (x1 - x0 + 1) * (y1 - y0 + 1))
         return None
 
     tiles: dict[tuple[int, int], np.ndarray] = {}
@@ -80,5 +80,5 @@ def fetch_dem(center_lat: float, center_lon: float, half_extent_m: float = 12000
         py = int((fy - yi) * tile.shape[0])
         out[k] = tile[min(py, tile.shape[0] - 1), min(px, tile.shape[1] - 1)]
     elev = out.reshape(n, n)
-    log.info("DEM: %d tiles, elevation %.0f–%.0f m", len(tiles), elev.min(), elev.max())
+    log.info("DEM: %d tiles, elevation %.0f-%.0f m", len(tiles), elev.min(), elev.max())
     return DEM(center_lat, center_lon, cell_m, elev)

@@ -1,8 +1,8 @@
-"""Calibration of the burn-probability field (first-class deliverable — docs/EVALUATION.md §3.2).
+"""Calibration of the burn-probability field (first-class deliverable, docs/EVALUATION.md §3.2).
 
 A probabilistic forecast is only useful if its probabilities mean what they say: cells assigned 30%
 should burn ~30% of the time. This module provides the proper scores (Brier, CRPS), the reliability
-diagram, empirical coverage, and two recalibration maps (temperature scaling, isotonic/PAV) — the
+diagram, empirical coverage, and two recalibration maps (temperature scaling, isotonic/PAV), the
 standard toolkit (Guo et al. 2017), applied to the spread field rather than a classifier.
 
 Everything is numpy-only so it runs in CI with no heavy deps.

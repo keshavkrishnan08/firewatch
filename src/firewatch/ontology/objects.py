@@ -297,7 +297,7 @@ class Resource(OntologyObject):
 class Recommendation(OntologyObject):
     """The decision-layer output. Human-in-the-loop; evidence[] links the justifying objects.
 
-    Nothing here is an autonomous order — it informs a human decision (FR-DEC-5, NFR guardrail).
+    Nothing here is an autonomous order, it informs a human decision (FR-DEC-5, NFR guardrail).
     """
 
     kind: RecommendationKind

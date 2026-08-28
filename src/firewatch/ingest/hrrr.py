@@ -1,8 +1,8 @@
-"""Weather connector — 10-m wind for the ROS + ensemble (FR-ING-2).
+"""Weather connector, 10-m wind for the ROS + ensemble (FR-ING-2).
 
 Primary path is NOAA HRRR (3 km, hourly) via Herbie from AWS Open Data. Because GRIB subsetting can
 be heavy/slow, the reliable keyless default is the NWS gridpoint API (api.weather.gov), which returns
-wind speed/direction at the point. Falls back to a documented constant if both are unavailable — the
+wind speed/direction at the point. Falls back to a documented constant if both are unavailable, the
 forecast then simply carries more wind uncertainty (FR-ING-5).
 """
 from __future__ import annotations
@@ -74,7 +74,7 @@ def fetch_wind(lat: float, lon: float, t: datetime | None = None, event_id: str 
     if w:
         log.info("wind: NWS %.1f m/s from %.0f°", w["speed_ms"], w.get("dir_from_deg", 0))
         return w
-    log.info("wind: no live source — using labeled constant fallback (higher uncertainty)")
+    log.info("wind: no live source, using labeled constant fallback (higher uncertainty)")
     u, v = _speed_dir_to_uv(6.0, 225.0)
     return {"wind_u": u, "wind_v": v, "speed_ms": 6.0, "dir_from_deg": 225.0, "rh_pct": 25.0,
             "temp_c": 25.0, "source": "constant fallback (no live wind)"}

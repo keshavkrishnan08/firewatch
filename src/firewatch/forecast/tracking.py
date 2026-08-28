@@ -2,8 +2,8 @@
 
 A genuine vision/tracking algorithm on **real** data: per GOES timestep we cluster the active-fire
 pixels into fire objects (DBSCAN), associate them across time by centroid proximity (nearest-neighbor
-data association — the core of multi-object tracking), and derive each fire's growth curve, centroid
-track, rate-of-spread, and heading. No synthetic imagery is involved — the "objects" are real fires
+data association, the core of multi-object tracking), and derive each fire's growth curve, centroid
+track, rate-of-spread, and heading. No synthetic imagery is involved, the "objects" are real fires
 observed from the GOES-18 geostationary satellite.
 """
 from __future__ import annotations
@@ -46,7 +46,7 @@ class FireTrack:
         return [p.centroid for p in self.points]
 
     def mean_ros_kmh(self) -> float:
-        """Mean centroid advance speed (km/h) — a proxy for rate-of-spread."""
+        """Mean centroid advance speed (km/h), a proxy for rate-of-spread."""
         speeds = []
         for a, b in zip(self.points[:-1], self.points[1:], strict=False):
             dt_h = (b.t_min - a.t_min) / 60.0

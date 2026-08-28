@@ -4,7 +4,7 @@ For each PopulationZone we compute the ensemble arrival-time distribution into t
 the time until burn-probability crosses a threshold (the lead-time), a confidence band from the
 ensemble spread, and an urgency score to rank zones. Every output is a `Recommendation` carrying
 lead_time, confidence, and `evidence[]` (the Forecast + Observations that justify it). Human-in-the-
-loop only — nothing here is phrased as an autonomous order (FR-DEC-5 / CLAUDE.md guardrail).
+loop only, nothing here is phrased as an autonomous order (FR-DEC-5 / CLAUDE.md guardrail).
 """
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def recommend_evacuations(
         if lead is not None and lead <= evac_clear_minutes:
             rationale = (
                 f"Fire projected to reach {zone.name} in ~{lead:.0f} min "
-                f"(80% band {lead_low:.0f}–{lead_high:.0f} min); zone needs ~{evac_clear_minutes:.0f} min to clear. "
+                f"(80% band {lead_low:.0f}-{lead_high:.0f} min); zone needs ~{evac_clear_minutes:.0f} min to clear. "
                 f"P(threatened within +{max_h} min) = {confidence:.0%}."
             )
         else:

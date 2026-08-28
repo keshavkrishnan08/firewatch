@@ -1,4 +1,4 @@
-"""FIREWATCH ingestion — one connector per public feed (docs/DATA_SOURCES.md).
+"""FIREWATCH ingestion, one connector per public feed (docs/DATA_SOURCES.md).
 
 Contract (FR-ING-1): `fetch(bbox, t0, t1) -> list[Observation | Layer]`, each with provenance
 (FR-ING-3), cached per event (FR-ING-4), failing soft (FR-ING-5). Connectors: firms, goes, hrrr

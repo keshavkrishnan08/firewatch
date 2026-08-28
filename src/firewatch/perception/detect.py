@@ -1,6 +1,6 @@
 """Smoke / flame detection on camera frames (FR-PER-1).
 
-Primary backend is an off-the-shelf detector (YOLO / RT-DETR via `ultralytics`) — detection is a
+Primary backend is an off-the-shelf detector (YOLO / RT-DETR via `ultralytics`), detection is a
 commodity input, not a contribution (docs/LITERATURE_REVIEW.md §1). When model weights / a GPU are
 unavailable, a transparent **classical-CV fallback** keeps the whole pipeline runnable: smoke is
 low-saturation, mid-value, and low-texture (hazy); flame is high-value warm-hue. The active backend

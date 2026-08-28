@@ -17,7 +17,7 @@ from firewatch.ontology.objects import Camera, new_id
 def fetch(bbox: BBox, event_id: str = "event") -> list[Camera]:
     path = cache_dir(event_id).parent / "cameras.json"
     if not path.exists():
-        log.info("cameras: no local cameras.json for '%s' — skipping (satellite+perimeter still drive the picture)", event_id)
+        log.info("cameras: no local cameras.json for '%s', skipping (satellite+perimeter still drive the picture)", event_id)
         return []
     records = json.loads(path.read_text())
     cams = []

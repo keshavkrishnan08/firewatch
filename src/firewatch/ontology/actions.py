@@ -1,4 +1,4 @@
-"""Ontology actions — the verbs that change state, each logged with its evidence (FR-ONT-3).
+"""Ontology actions, the verbs that change state, each logged with its evidence (FR-ONT-3).
 
 These are thin, auditable wrappers over the store. The heavier verbs (`assimilate`,
 `georeference_camera_front`, `recommend_*`) live in their own modules (forecast/, perception/,

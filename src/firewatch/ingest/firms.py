@@ -29,7 +29,7 @@ def fetch(bbox: BBox, t0: datetime, t1: datetime, fire_id: str = "fire", event_i
           map_key: str | None = None) -> list[Observation]:
     key = map_key or firms_map_key()
     if not key:
-        log.info("FIRMS: no MAP_KEY set — skipping (set FIRMS_MAP_KEY in .env). Picture degrades gracefully.")
+        log.info("FIRMS: no MAP_KEY set, skipping (set FIRMS_MAP_KEY in .env). Picture degrades gracefully.")
         return []
     day_range = max(1, min(10, (t1.date() - t0.date()).days + 1))
     w, s, e, n = bbox.as_tuple()

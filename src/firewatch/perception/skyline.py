@@ -24,7 +24,7 @@ def horizon_elevation_angles(
     max_range_m: float = 30000.0,
     step_m: float | None = None,
 ) -> np.ndarray:
-    """Max terrain elevation angle (degrees) along each column's azimuth — independent of tilt."""
+    """Max terrain elevation angle (degrees) along each column's azimuth, independent of tilt."""
     f = (camera.image_width / 2.0) / math.tan(math.radians(camera.fov_deg) / 2.0)
     cx, cy = dem.lonlat_to_local(camera.lon, camera.lat)
     step = step_m or max(dem.cell_m, 20.0)

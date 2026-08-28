@@ -1,6 +1,6 @@
 """Retrospective evaluation on a real historical fire (docs/EVALUATION.md §5).
 
-Ground truth is the fire's **observed progression from GOES-18 ABI active-fire detections** — a real,
+Ground truth is the fire's **observed progression from GOES-18 ABI active-fire detections**, a real,
 keyless, reproducible signal (the same active-fire labels WildfireSpreadTS uses). The protocol:
 
   1. Pre-register the fire, window, horizons, metrics, and thresholds (written to
@@ -12,7 +12,7 @@ keyless, reproducible signal (the same active-fire labels WildfireSpreadTS uses)
 
 Terrain (Terrain Tiles), fuels (ESA WorldCover), and wind (HRRR historical) are all real. The wind
 *prior* is intentionally weak with a wide ensemble spread, so the ablation measures how much the
-GOES assimilation resolves the spread — which is the whole thesis.
+GOES assimilation resolves the spread, which is the whole thesis.
 """
 from __future__ import annotations
 
@@ -83,13 +83,13 @@ RETRO_REGISTRY: dict[str, RetroConfig] = {
         start_utc="2025-01-08T02:30:00Z", window_min=360, assim_min=180,
         horizons=[210, 240, 300, 360], cell_m=250.0, half_extent_m=14000.0, goes_steps=16, members=40,
     ),
-    # Nevada — Davis Fire, Washoe Valley south of Reno; ~20,000 evacuated (0 deaths, 16 homes).
+    # Nevada, Davis Fire, Washoe Valley south of Reno; ~20,000 evacuated (0 deaths, 16 homes).
     "davis": RetroConfig(
         key="davis", name="Davis Fire (2024)", center_lon=-119.8325, center_lat=39.3053,
         start_utc="2024-09-07T21:30:00Z", window_min=360, assim_min=180,
         horizons=[210, 240, 300, 360], cell_m=250.0, half_extent_m=16000.0, goes_steps=16, members=40,
     ),
-    # Washington — Gray Fire, Level-3 evacuation of Medical Lake within ~1 h (1 death, 240 structures).
+    # Washington, Gray Fire, Level-3 evacuation of Medical Lake within ~1 h (1 death, 240 structures).
     "gray": RetroConfig(
         key="gray", name="Gray Fire (2023)", center_lon=-117.731, center_lat=47.540,
         start_utc="2023-08-18T19:27:00Z", window_min=360, assim_min=180,
@@ -109,7 +109,7 @@ def write_prereg(cfg: RetroConfig | None = None) -> str:
     """Write the consolidated pre-registration for the whole registered fire set.
 
     The pinned record is the version-controlled RETRO_REGISTRY plus git history; this file is the
-    human-readable snapshot. `cfg` is accepted for backward compatibility but ignored — the doc
+    human-readable snapshot. `cfg` is accepted for backward compatibility but ignored, the doc
     always lists every pre-registered fire so it stays consistent regardless of which one is run.
     """
     now = datetime.now(UTC)
@@ -118,7 +118,7 @@ def write_prereg(cfg: RetroConfig | None = None) -> str:
         f"{c.assim_min} | {c.horizons} | {c.cell_m:.0f} m, ±{c.half_extent_m / 1000:.0f} km |"
         for k, c in RETRO_REGISTRY.items()
     )
-    text = f"""# Retrospective pre-registration — {len(RETRO_REGISTRY)} real fires (GOES-18 era)
+    text = f"""# Retrospective pre-registration, {len(RETRO_REGISTRY)} real fires (GOES-18 era)
 
 *The pinned record is the version-controlled `retrospective.RETRO_REGISTRY` and the git history;
 this file is a human-readable snapshot. Ground truth = GOES-18 ABI active-fire progression (real,
@@ -133,12 +133,12 @@ scored window is held out beyond the assimilation window.*
 
 ## Fixed protocol (same for every fire)
 
-- **Skill:** perimeter IoU, Sørensen–Dice, burn Brier score, per-horizon.
+- **Skill:** perimeter IoU, Sørensen-Dice, burn Brier score, per-horizon.
 - **Coverage:** empirical coverage of the 90% credible region vs GOES truth, reported **raw** and
   **calibrated**. Calibration = a fast-tail ensemble spread mixture (tight core preserves the p≥0.5
   point forecast) plus **leave-one-out** region-level calibration across fires. Never tuned to the
   fire being scored; both numbers published.
-- **Ablation baseline:** assimilation OFF (physical prior, no obs) — the ON arm must beat it.
+- **Ablation baseline:** assimilation OFF (physical prior, no obs), the ON arm must beat it.
 - **Warning lead time:** for each community the fire reaches after forecast issue, the interval
   between the forecast first flagging it and the fire's GOES-observed arrival (non-positive where the
   community is already inside the fire at issue, reported honestly).
@@ -194,7 +194,7 @@ def build_retro_bundle(cfg: RetroConfig, store: Store) -> EventBundle:
     raw = sorted([o for o in raw if o.geometry], key=lambda o: o.t)
     if not raw:
         # RuntimeError (not SystemExit) so a batch run over many fires catches it and continues.
-        raise RuntimeError(f"no GOES fire pixels found for {cfg.name} in window — adjust config/window.")
+        raise RuntimeError(f"no GOES fire pixels found for {cfg.name} in window, adjust config/window.")
     t0_eff = raw[0].t
 
     # truth arrival raster (minutes since first detection) + relabel obs times to t0_eff
@@ -239,7 +239,7 @@ def build_retro_bundle(cfg: RetroConfig, store: Store) -> EventBundle:
     store.put(fire)
     store.put_many(zones + roads + [weather] + obs_perims + obs)
 
-    note = (f"Retrospective on {cfg.name} — ground truth is GOES-18 ABI active-fire progression "
+    note = (f"Retrospective on {cfg.name}, ground truth is GOES-18 ABI active-fire progression "
             f"(real, keyless). Terrain=Terrain Tiles; fuels={fuelinfo['source']}; wind={wind['source']}. "
             f"Assimilate GOES ≤ +{cfg.assim_min} min (causal), forecast/score beyond.")
 
@@ -294,7 +294,7 @@ def run_retrospective(key: str = "park") -> dict:
 
 
 def _print(cfg, result, results):
-    print(f"\n{'='*74}\n🔥 FIREWATCH RETROSPECTIVE — {cfg.name}\n{'='*74}")
+    print(f"\n{'='*74}\n🔥 FIREWATCH RETROSPECTIVE, {cfg.name}\n{'='*74}")
     print(f"ground truth: {results['ground_truth']} | {results['n_observations']} GOES detections")
     print(f"feeds: {', '.join(results['feeds'])}")
     so, sf = results["skill_on"], results["skill_off"]
@@ -314,6 +314,6 @@ def _print(cfg, result, results):
     if results["lead_time"]:
         print("\nlead-time (earliest flag, ON vs OFF):")
         for L in results["lead_time"]:
-            d = f"{L['lead_delta_min']:.0f} min earlier" if L.get("lead_delta_min") else ("ON only" if L.get("on_flag_min") is not None and L.get("off_flag_min") is None else "—")
+            d = f"{L['lead_delta_min']:.0f} min earlier" if L.get("lead_delta_min") else ("ON only" if L.get("on_flag_min") is not None and L.get("off_flag_min") is None else "-")
             print(f"  {L['zone']:<18} truth@{L['truth_arrival_min']:.0f}m  ON:{L['on_flag_min']}  OFF:{L['off_flag_min']}  {d}" if L.get("truth_arrival_min") is not None else f"  {L['zone']:<18} not reached")
     print("=" * 74)

@@ -1,4 +1,4 @@
-"""`firewatch ingest --fire <id>` — pull live public feeds into the ontology for a real event."""
+"""`firewatch ingest --fire <id>`, pull live public feeds into the ontology for a real event."""
 from __future__ import annotations
 
 import logging

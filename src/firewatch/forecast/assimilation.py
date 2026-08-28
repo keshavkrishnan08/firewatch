@@ -1,4 +1,4 @@
-"""Observation assimilation for the spread ensemble (RESEARCH CORE — FR-FC-3).
+"""Observation assimilation for the spread ensemble (RESEARCH CORE, FR-FC-3).
 
 We use a **regularized particle filter**. Each ensemble member is a particle (a parameter draw +
 its MTT arrival-time map). When an observation arrives (GOES/VIIRS hotspots, a georeferenced camera
@@ -9,12 +9,12 @@ re-forecast forward from the reweighted ensemble.
 
 Why a particle filter rather than an EnKF: front/perimeter observations are strongly nonlinear and
 the classic EnKF failure mode here is *spurious fires* from unconstrained additive perturbations
-(Beezley & Mandel 2008). A PF avoids that entirely — likelihoods only ever reweight physically-run
-members — and we further regularize by (a) capping head ROS (`SpreadParams.spread_cap_ms`) and
+(Beezley & Mandel 2008). A PF avoids that entirely, likelihoods only ever reweight physically-run
+members, and we further regularize by (a) capping head ROS (`SpreadParams.spread_cap_ms`) and
 (b) jittering on resample to keep diversity. Observation error is weighted by provenance (FR-ING-3).
 
 Lineage: Mandel 2008/2009; Beezley & Mandel 2008; Rochoux & Trouvé 2014 (see docs/REFERENCES.md).
-The contribution is the *accessible, fused, calibrated* packaging — not the filter itself.
+The contribution is the *accessible, fused, calibrated* packaging, not the filter itself.
 """
 from __future__ import annotations
 

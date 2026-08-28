@@ -1,7 +1,7 @@
-"""Assets connector — roads, buildings, and population zones from OpenStreetMap (FR-ING-2).
+"""Assets connector, roads, buildings, and population zones from OpenStreetMap (FR-ING-2).
 
 Roads (egress graph), buildings (exposure), and populated places (evacuation zones) via osmnx /
-Overpass — keyless. Best-effort with graceful degradation: on failure the decision layer simply has
+Overpass, keyless. Best-effort with graceful degradation: on failure the decision layer simply has
 fewer assets to reason over (FR-ING-5).
 """
 from __future__ import annotations

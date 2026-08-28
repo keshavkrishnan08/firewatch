@@ -3,7 +3,7 @@
 An append-only log of object *versions*, backed by DuckDB. Every write appends a row keyed by
 (kind, obj_id, valid_time, seq); reads reconstruct the world "as of" any instant by taking, per
 object id, the most recent version whose valid-time is ≤ the query time. That single property is
-what powers the UI time-scrubber and the retrospective replay — no future data leaks into a past
+what powers the UI time-scrubber and the retrospective replay, no future data leaks into a past
 state (a causal-masking guarantee we test in tests/).
 
 DuckDB + JSON is deliberately lightweight: no server, trivial to set up, and versioned queries come
@@ -139,7 +139,7 @@ class Store:
         ).fetchone()[0]
 
     def time_bounds(self) -> tuple[datetime | None, datetime | None]:
-        """(earliest valid_t, latest valid_t) across all objects — drives the scrubber range."""
+        """(earliest valid_t, latest valid_t) across all objects, drives the scrubber range."""
         row = self.con.execute(
             "SELECT min(valid_t), max(valid_t) FROM object_versions"
         ).fetchone()

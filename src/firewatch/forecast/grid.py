@@ -138,7 +138,7 @@ def synthetic_grid(
     fuel = np.full((n, n), base_fuel, dtype=int)
     fuel[(ys > n * 0.62)] = 4  # chaparral to the north (faster)
     fuel[(xs < n * 0.18)] = 1  # short grass on the west edge
-    # meandering non-burnable river near column 0.72n, with a gap between rows 0.42n–0.58n
+    # meandering non-burnable river near column 0.72n, with a gap between rows 0.42n-0.58n
     river_col = n * 0.72 + n * 0.05 * np.sin(ys / n * 2 * np.pi)
     river = (np.abs(xs - river_col) < 1.4) & ~((ys > n * 0.42) & (ys < n * 0.58))
     fuel[river] = 0

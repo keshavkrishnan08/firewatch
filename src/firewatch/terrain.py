@@ -1,4 +1,4 @@
-"""Digital Elevation Model sampler — the ray-cast surface for georeferencing and the slope term
+"""Digital Elevation Model sampler, the ray-cast surface for georeferencing and the slope term
 for spread. Backed by a numpy array in a local meter frame with bilinear sampling; can be built
 from a synthetic grid (demo) or a rasterio DEM (real 3DEP/SRTM ingest)."""
 from __future__ import annotations
