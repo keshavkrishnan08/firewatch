@@ -1,4 +1,4 @@
-# CLAUDE.md — FIREWATCH working context (operating manual)
+# CLAUDE.md, FIREWATCH working context (operating manual)
 
 > Read this first. This is the operating manual for anyone (human or Claude Code) working in this
 > repo. If you only read one file, read this one, then open `docs/PRD.md`. The full consolidated
@@ -7,8 +7,8 @@
 ## What FIREWATCH is (one paragraph)
 
 FIREWATCH is a real-time **wildfire common operating picture (COP)**: an open-source system that
-ingests heterogeneous public feeds — ground/tower camera imagery, geostationary and polar-orbiting
-satellite active-fire products, weather, terrain, and fuels — resolves them into a single
+ingests heterogeneous public feeds, ground/tower camera imagery, geostationary and polar-orbiting
+satellite active-fire products, weather, terrain, and fuels, resolves them into a single
 **ontology** of fires, sensors, and threatened assets, produces a **probabilistic short-horizon
 spread forecast that continuously self-corrects as new observations arrive** (data assimilation),
 and drives a **human-in-the-loop decision layer** (evacuation lead-time, egress-route threat,
@@ -59,15 +59,15 @@ firewatch/
 
 ## Build order (do NOT build it all at once)
 
-- **M1 — Live COP from public feeds.** Ingest FIRMS/VIIRS + GOES hotspots + HRRR wind + camera tile
+- **M1, Live COP from public feeds.** Ingest FIRMS/VIIRS + GOES hotspots + HRRR wind + camera tile
   onto a map. No ML yet. Deliverable: a live board of a real fire.
-- **M2 — Perception.** YOLO/RT-DETR smoke+flame detection → SAM2 plume masks. (Classical-CV fallback
+- **M2, Perception.** YOLO/RT-DETR smoke+flame detection → SAM2 plume masks. (Classical-CV fallback
   ships so the pipeline runs without GPU/model weights.)
-- **M3 — Georeferencing (novelty 1).** Project the smoke plume onto a DEM → lat/lon + uncertainty
+- **M3, Georeferencing (novelty 1).** Project the smoke plume onto a DEM → lat/lon + uncertainty
   cone for the front. "Click a camera, get a map pin."
-- **M4 — Assimilating spread forecast (research core).** CA/level-set spread + ensemble/particle
+- **M4, Assimilating spread forecast (research core).** CA/level-set spread + ensemble/particle
   assimilation of GOES/VIIRS/camera obs → calibrated probabilistic perimeter at +30/+60/+180 min.
-- **M5 — Decision layer + retrospective.** Risk-to-population, evacuation lead-time, egress threat,
+- **M5, Decision layer + retrospective.** Risk-to-population, evacuation lead-time, egress threat,
   staging; then replay a real named fire and show earlier/better warning.
 
 ## Working principles (apply on every task)
@@ -85,7 +85,7 @@ firewatch/
 - One connector per feed under `ingest/`, each exposing `fetch(bbox, t0, t1) -> list[Observation | Layer]`.
 - All timestamps UTC, ISO-8601. Geometry stored EPSG:4326; math in a projected CRS.
 - Every `Observation` carries **provenance** {source, product, retrieved_at, native_resolution,
-  reported_uncertainty} — required downstream.
+  reported_uncertainty}, required downstream.
 - Do not commit large rasters; cache under `data/` (gitignored) keyed by `event_id`.
 - Every milestone has an acceptance test in `tests/`.
 
@@ -111,6 +111,6 @@ make web                           # COP board at :5173
 ## For the application (why this exists)
 
 Flagship portfolio piece for the **Palantir Meritocracy / American Tech Fellowship**. The load-bearing
-parts are the M5 retrospective and the success metrics in `docs/PRD.md` §12 — not the model
+parts are the M5 retrospective and the success metrics in `docs/PRD.md` §12, not the model
 architecture. Optimize for a live demo on real data, a public reproducible repo, honest evaluation,
 and a retrospective on a real fire.
