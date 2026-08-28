@@ -1,7 +1,7 @@
 """FIREWATCH perception: detect -> segment -> features -> georeference (+ skyline, triangulate).
 
 Detection/segmentation are commodity inputs (off-the-shelf YOLO/RT-DETR + SAM2, with classical
-fallbacks). The novelty lives in georeference.py + skyline.py + triangulate.py — camera→map with
+fallbacks). The novelty lives in georeference.py + skyline.py + triangulate.py, camera→map with
 self-calibration and uncertainty. See docs/LITERATURE_REVIEW.md §6b.
 """
 from firewatch.perception.detect import Detection, SmokeDetector, smoke_likelihood

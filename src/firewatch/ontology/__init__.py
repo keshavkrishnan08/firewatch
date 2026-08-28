@@ -1,4 +1,4 @@
-"""FIREWATCH ontology — the single source of truth (objects · links · actions).
+"""FIREWATCH ontology, the single source of truth (objects · links · actions).
 
 See docs/ONTOLOGY.md. Modules read/write these objects; they never exchange raw feed payloads.
 """

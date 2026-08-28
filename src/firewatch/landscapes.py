@@ -2,7 +2,7 @@
 
 Instead of self-distilling the physical model on synthetic grids, we sample random windows from real
 DEM (AWS Terrain Tiles) + real ESA WorldCover fuels across diverse California wildland sites. The
-surrogate then learns to emulate the physics prior on *real* landscapes — the training inputs are no
+surrogate then learns to emulate the physics prior on *real* landscapes, the training inputs are no
 longer synthetic (only the wind/moisture forcings are randomized, exactly as an ensemble perturbs them).
 """
 from __future__ import annotations

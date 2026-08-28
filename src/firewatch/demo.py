@@ -1,4 +1,4 @@
-"""Fully-offline synthetic demo event (no network / no keys) — the `make demo` path.
+"""Fully-offline synthetic demo event (no network / no keys), the `make demo` path.
 
 Builds a self-contained fire with terrain, cameras, evacuation zones, egress roads, structures, and
 a synthetic 'truth' fire from which we sample GOES/VIIRS hotspots, a camera-derived front (via the
@@ -65,7 +65,7 @@ def build_demo_event(store: Store, event_id: str = "demo", n: int = 110, cell_m:
         ignition_estimate={"type": "Point", "coordinates": list(IGNITION)},
     )
 
-    # the 'truth' fire (stronger, right-drifting wind) — the reference the forecast is scored against
+    # the 'truth' fire (stronger, right-drifting wind), the reference the forecast is scored against
     truth = truth_arrival(grid, IGNITION, SpreadParams(wind_mult=1.3, wind_dir_offset_deg=12, ros_mult=1.15))
 
     # cameras positioned to view the fire from two directions (poses aimed at ignition)
@@ -86,7 +86,7 @@ def build_demo_event(store: Store, event_id: str = "demo", n: int = 110, cell_m:
                            pan_deg=pan, tilt_deg=tilt, fov_deg=55, image_width=1280, image_height=720,
                            network="ALERTCalifornia (synthetic)", pan_uncertainty_deg=2.0, tilt_uncertainty_deg=3.0))
 
-    # evacuation zones downwind (ENE), where the fire is heading — placed so the fire reaches them
+    # evacuation zones downwind (ENE), where the fire is heading, placed so the fire reaches them
     # tens of minutes to a couple hours out, giving meaningful (positive) warning lead-times.
     zones = []
     for i, (name, pop, dist, brg, half) in enumerate([
@@ -168,7 +168,7 @@ def build_demo_event(store: Store, event_id: str = "demo", n: int = 110, cell_m:
         structures=structures, cameras=cams, observations=observations,
         wind={"speed_ms": WIND_SPEED, "dir_to_deg": WIND_DIR_TO, "rh_pct": 18, "temp_c": 33, "source": weather.source},
         truth_arrival=truth,
-        note="Synthetic offline demo — terrain, fuels, wind, and 'truth' fire are simulated and labeled as such. "
+        note="Synthetic offline demo, terrain, fuels, wind, and 'truth' fire are simulated and labeled as such. "
              "Not a real fire; for real events use `make replay FIRE=<id>`.",
     )
     return bundle

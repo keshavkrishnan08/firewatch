@@ -1,6 +1,6 @@
 """Promptable plume segmentation (FR-PER-2).
 
-Primary backend is SAM 2 (promptable video segmentation with streaming memory; Ravi et al. 2024) —
+Primary backend is SAM 2 (promptable video segmentation with streaming memory; Ravi et al. 2024) -
 adopted as-is. When SAM 2 weights are unavailable, a classical fallback segments the plume inside a
 detector box from the smoke-likelihood field and (optionally) GrabCut, and propagates it across
 frames by re-seeding from the previous mask's bounding box.

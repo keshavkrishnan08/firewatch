@@ -1,6 +1,6 @@
 """NIFC / WFIGS operational fire-perimeter connector.  [FR-ING-2]
 
-Authoritative incident perimeters from the public WFIGS ArcGIS FeatureServer — used both as a late,
+Authoritative incident perimeters from the public WFIGS ArcGIS FeatureServer, used both as a late,
 high-quality assimilation observation and as the ground truth that forecast IoU / lead-time metrics
 are scored against. Keyless, GeoJSON out. Degrades gracefully if the service is unreachable.
 """
@@ -13,7 +13,7 @@ from shapely.geometry import shape
 from firewatch.ingest.base import BBox, http_get, log, soft
 from firewatch.ontology.objects import Observation, ObservationKind, Provenance, new_id
 
-# WFIGS Interagency Perimeters (current) — public, no key
+# WFIGS Interagency Perimeters (current), public, no key
 _CURRENT = "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query"
 
 

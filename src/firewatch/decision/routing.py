@@ -1,7 +1,7 @@
 """Egress-route threat timing (FR-DEC-3).
 
 For each road segment we compute the ensemble time-to-threat (when fire is likely to reach it) and
-flag routes that close *before* the zones they serve can clear — the routes an incident commander
+flag routes that close *before* the zones they serve can clear, the routes an incident commander
 most needs to know about. Output is `Recommendation(close_road)` objects with evidence + confidence.
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ def egress_threat(
         name = road.name or f"segment {road.id[:8]}"
         if closes_before_clear:
             rationale = (
-                f"Egress route '{name}' projected to be threatened in ~{tstar:.0f} min — "
+                f"Egress route '{name}' projected to be threatened in ~{tstar:.0f} min, "
                 f"before a ~{clear_minutes:.0f} min clearance window. P(threatened) = {confidence:.0%}. "
                 f"Prioritize or find an alternate."
             )

@@ -1,7 +1,7 @@
 """Risk-to-population (FR-DEC-1): expected exposed structures/people over the forecast horizon.
 
 Overlays the ensemble burn-probability field on building footprints and population zones. Output is
-an expected-exposure number per zone and in aggregate, with the horizon it is evaluated at — never a
+an expected-exposure number per zone and in aggregate, with the horizon it is evaluated at, never a
 point claim, always the probability-weighted expectation.
 """
 from __future__ import annotations

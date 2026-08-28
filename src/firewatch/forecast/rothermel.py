@@ -1,4 +1,4 @@
-"""Rothermel (1972) surface rate-of-spread — the transparent physical prior (FR-FC-1).
+"""Rothermel (1972) surface rate-of-spread, the transparent physical prior (FR-FC-1).
 
 This is a faithful implementation of the classic Rothermel surface-fire spread equations as
 collected in Andrews (2018), "The Rothermel surface fire spread model and associated developments"
@@ -66,7 +66,7 @@ _MIDFLAME_FACTOR = 0.4  # 10-m wind -> midflame wind (open canopy default)
 @dataclass
 class RothermelResult:
     ros_head_ms: float  # head-fire rate of spread (m/s)
-    ros_base_ms: float  # no-wind, no-slope ROS (m/s) — used for backing spread
+    ros_base_ms: float  # no-wind, no-slope ROS (m/s), used for backing spread
     length_to_breadth: float  # ellipse LB ratio (>= 1)
     reaction_intensity: float  # IR, Btu/ft^2/min (diagnostic)
 
@@ -90,7 +90,7 @@ def rothermel(
 
     Parameters
     ----------
-    fuel_model : Anderson 1–13 (0 = non-burnable).
+    fuel_model : Anderson 1-13 (0 = non-burnable).
     dead_moisture : dead fuel moisture fraction (e.g., 0.06 = 6%).
     wind_speed_ms : 10-m wind speed magnitude in the head direction (m/s).
     slope_fraction : rise/run in the upslope direction contributing to the head (>= 0).

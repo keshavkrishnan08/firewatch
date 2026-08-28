@@ -25,7 +25,7 @@ MUT = "#8a939e"
 BLUE = "#4c9aff"
 # Survival uplift from ~1 h extra evacuation lead time, as a fraction of exposed residents.
 # Order-of-magnitude planning figure: exposed-population fatality rates in fast wildfires run a few
-# tenths of a percent, of which roughly 10–30% is preventable with earlier warning. Deliberately
+# tenths of a percent, of which roughly 10-30% is preventable with earlier warning. Deliberately
 # conservative; used only for a labeled estimate, never presented as a measured outcome.
 LIVES_UPLIFT = (0.00015, 0.00045)
 FIRE = "#ff6848"
@@ -363,7 +363,7 @@ def results_figures(events):
     ax.set_ylabel("km/h", color=MUT, fontsize=8)
     out["spread"] = save(fig, "spread")
 
-    # 90% coverage vs horizon (line per fire) — calibration of the forecast envelope
+    # 90% coverage vs horizon (line per fire), calibration of the forecast envelope
     if hs:
         fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG); _style(ax, "Forecast 90% region coverage by horizon")
         for e in events:
@@ -435,7 +435,7 @@ def results_figures(events):
     for x, e in enumerate(events):
         r = e.get("residents_at_risk", 0)
         a, b = round(r * lo), round(r * hi)
-        lab = f"{a}–{b}" if a > 0 else (f"up to {b}" if b > 0 else "<1")
+        lab = f"{a}-{b}" if a > 0 else (f"up to {b}" if b > 0 else "<1")
         ax.text(x, mids[x], f"  {lab}", color=TXT, fontsize=8, va="bottom", ha="center")
     ax.text(0.5, -0.22, "modeled estimate, not a measured outcome; a human always makes the evacuation call",
             transform=ax.transAxes, ha="center", color=MUT, fontsize=7)

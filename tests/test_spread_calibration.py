@@ -20,7 +20,7 @@ def _fire(key, cov_at_tau, raw):
 def test_leave_one_out_calibration_lifts_and_holds_out():
     # Three fires whose credible-region coverage decays with the threshold tau. Even the widest
     # region (tau=0.01) averages below the 0.90 target, so the calibrator should pick the widest
-    # level and report each fire's coverage there — strictly >= the raw tau=0.10 coverage.
+    # level and report each fire's coverage there, strictly >= the raw tau=0.10 coverage.
     curves = [
         np.linspace(0.80, 0.20, 30),  # fire A
         np.linspace(0.90, 0.30, 30),  # fire B

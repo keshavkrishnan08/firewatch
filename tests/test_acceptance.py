@@ -1,4 +1,4 @@
-"""M1–M5 acceptance test (mirrors docs/ROADMAP.md) — the full stack on a small synthetic event."""
+"""M1-M5 acceptance test (mirrors docs/ROADMAP.md), the full stack on a small synthetic event."""
 import numpy as np
 import pytest
 

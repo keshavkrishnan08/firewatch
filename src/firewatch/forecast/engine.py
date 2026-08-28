@@ -2,7 +2,7 @@
 
 `run_forecast(...)` is the one call the API/replay use. It builds an ensemble, optionally assimilates
 observations (the ON arm), and emits per-horizon burn-probability fields, expected perimeters, 90%
-regions, and probability bands ready for the COP map. The assimilate=False path is the OFF baseline —
+regions, and probability bands ready for the COP map. The assimilate=False path is the OFF baseline -
 the two together are the headline ablation (docs/EVALUATION.md §3.1).
 """
 from __future__ import annotations
@@ -119,7 +119,7 @@ def run_forecast(
 
 def truth_arrival(grid: FireGrid, ignition_lonlat, params: SpreadParams | None = None) -> np.ndarray:
     """A single deterministic 'ground-truth' spread run (used for the synthetic demo + as the
-    reference in evaluation). Clearly a model run — labeled as such wherever it is reported."""
+    reference in evaluation). Clearly a model run, labeled as such wherever it is reported."""
     ign = grid.ignition_mask(ignition_lonlat, radius_m=150.0)
     return solve_arrival_times(grid, ign, params or SpreadParams())
 

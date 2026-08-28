@@ -70,7 +70,7 @@ def run_replay(fire: str = "demo", n_members: int = 60, quiet: bool = False) -> 
 
 
 def _print_summary(bundle, result, summary) -> None:
-    print(f"\n{'='*74}\n🔥 FIREWATCH replay — {summary['fire']}\n{'='*74}")
+    print(f"\n{'='*74}\n🔥 FIREWATCH replay, {summary['fire']}\n{'='*74}")
     print(f"note: {bundle.note}\n")
     print(f"ontology: {summary['ontology_objects']} object-versions | feeds: {', '.join(summary['feeds'])}")
     if "skill_on" in result:
@@ -91,23 +91,23 @@ def _print_summary(bundle, result, summary) -> None:
         print(f"  EVAC  {r.target_name:<16} urgency {r.urgency:.2f}  lead {lt}  conf {r.confidence:.0%}")
     if not summary["lead_time"]:
         print("\n(live fire: ablation & lead-time delta require a pre-registered retrospective with a"
-              "\n perimeter time-series — see docs/EVALUATION.md. This view is the live forward forecast.)")
+              "\n perimeter time-series, see docs/EVALUATION.md. This view is the live forward forecast.)")
         print(f"\nCOP written: {summary['cop_path']}")
         print(f"figures: {', '.join(summary['figures'].values())}")
         print("=" * 74)
         return
-    print("\n'Moved-the-needle' — warning lead-time before the fire arrives (ON vs OFF baseline):")
+    print("\n'Moved-the-needle', warning lead-time before the fire arrives (ON vs OFF baseline):")
     print(f"  {'zone':<15}{'truth@':>7}{'ON lead':>9}{'OFF lead':>9}   verdict")
     for L in summary["lead_time"]:
         ta = f"{L['truth_arrival_min']:.0f}m" if L["truth_arrival_min"] is not None else "n/a"
-        onl = f"+{L['on_lead_min']:.0f}m" if L["on_lead_min"] is not None else "—"
-        offl = f"+{L['off_lead_min']:.0f}m" if L["off_lead_min"] is not None else "—"
+        onl = f"+{L['on_lead_min']:.0f}m" if L["on_lead_min"] is not None else "-"
+        offl = f"+{L['off_lead_min']:.0f}m" if L["off_lead_min"] is not None else "-"
         if L["on_lead_min"] is not None and L["off_lead_min"] is None:
             verdict = f"ON warns {L['on_lead_min']:.0f} min early; baseline misses it"
         elif L["lead_delta_min"]:
             verdict = f"ON warns {L['lead_delta_min']:.0f} min earlier"
         elif L["truth_arrival_min"] and L["truth_arrival_min"] > 500:
-            verdict = "protected (barrier) — not threatened"
+            verdict = "protected (barrier), not threatened"
         else:
             verdict = "same"
         print(f"  {L['zone']:<15}{ta:>7}{onl:>9}{offl:>9}   {verdict}")

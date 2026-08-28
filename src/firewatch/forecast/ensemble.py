@@ -3,7 +3,7 @@
 Each member perturbs wind, fuel moisture, ignition location, and a global ROS multiplier, then runs
 the MTT spread solver. The (weighted) fraction of members that have burned a cell by a given horizon
 IS the burn-probability. Weights are uniform for the no-assimilation baseline and set by the particle
-filter (`assimilation.py`) for the assimilation arm — that difference is the ON/OFF ablation.
+filter (`assimilation.py`) for the assimilation arm, that difference is the ON/OFF ablation.
 """
 from __future__ import annotations
 
@@ -97,7 +97,7 @@ class Ensemble:
 
     def run(self, surrogate=None) -> Ensemble:
         """Solve each member's arrival field. If a learned `surrogate` is given, use it (fast prior)
-        instead of the physical MTT solver — the assimilation/calibration loop is unchanged."""
+        instead of the physical MTT solver, the assimilation/calibration loop is unchanged."""
         for m in self.members:
             if surrogate is not None and self.initial_mask is None:
                 m.arrival = surrogate.predict_arrival(self.grid, m.ignition_lonlat, m.params)

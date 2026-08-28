@@ -1,8 +1,8 @@
-"""Learned smoke segmenter (FR-PER-1/2) — a small U-Net trained on real torch.
+"""Learned smoke segmenter (FR-PER-1/2), a small U-Net trained on real torch.
 
-Detection/segmentation are commodity inputs (docs/LITERATURE_REVIEW.md §1–2); this provides a genuine
+Detection/segmentation are commodity inputs (docs/LITERATURE_REVIEW.md §1-2); this provides a genuine
 *learned* torch model on the ML path (not the classical heuristic). `make train` trains it on **real
-wildfire-camera imagery** — the Pyronear `pyro-sdis` dataset (HuggingFace, keyless) — with box-
+wildfire-camera imagery**, the Pyronear `pyro-sdis` dataset (HuggingFace, keyless), with box-
 supervised masks refined by the smoke-likelihood field (`train_smoke_net_real`). When that dataset is
 unreachable it falls back to procedurally-generated frames (`train_smoke_net`, clearly labeled). Runs
 on MPS/CUDA/CPU and reports a validation mask-IoU; FIgLib/SmokeyNet weights are a drop-in.

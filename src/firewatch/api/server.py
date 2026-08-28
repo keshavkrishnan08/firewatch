@@ -1,7 +1,7 @@
 """FastAPI backend for the COP board (FR-API-1).
 
 Serves the precomputed COP JSON plus live ontology time-travel endpoints (state/forecast/decisions
-as of any instant — the scrubber is a query over object versions), static frames/figures, and the
+as of any instant, the scrubber is a query over object versions), static frames/figures, and the
 read-only NL query. Run: `make api` (uvicorn firewatch.api.server:app --port 8000).
 """
 from __future__ import annotations
@@ -40,7 +40,7 @@ def _parse_t(t: str | None) -> datetime | None:
 def _store(event_id: str) -> Store:
     db = EventPaths(event_id).ontology_db
     if not db.exists():
-        raise HTTPException(404, f"no ontology store for event '{event_id}' — run `make replay FIRE={event_id}`")
+        raise HTTPException(404, f"no ontology store for event '{event_id}', run `make replay FIRE={event_id}`")
     return Store(db)
 
 
@@ -59,7 +59,7 @@ def events():
 def cop(event_id: str):
     path = EventPaths(event_id).outputs / "cop.json"
     if not path.exists():
-        raise HTTPException(404, f"no COP for '{event_id}' — run `make replay FIRE={event_id}`")
+        raise HTTPException(404, f"no COP for '{event_id}', run `make replay FIRE={event_id}`")
     return JSONResponse(json.loads(path.read_text()))
 
 

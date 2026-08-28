@@ -6,7 +6,7 @@ recommendations, writes everything back into the ontology, and emits the COP JSO
 figures the frontend and the writeup consume. Reproducible and causal by construction.
 
 The multi-issue-time analyses (sharpening curve, lead-time delta) evolve a *single* ensemble through
-time and assimilate observations incrementally, snapshotting metrics at each issue time — which is
+time and assimilate observations incrementally, snapshotting metrics at each issue time, which is
 both far cheaper than re-running and the physically correct sequential-assimilation semantics.
 """
 from __future__ import annotations
@@ -158,7 +158,7 @@ def _evolve(bundle: EventBundle, issue_offsets: list[int], *, assimilate: bool,
 
 def sharpening_series(bundle: EventBundle, issue_offsets_min: list[int], horizon: int,
                       cfg: EnsembleConfig | None = None) -> list[dict]:
-    """Region-90 area at a fixed horizon vs issue time — the 'forecast sharpens' curve."""
+    """Region-90 area at a fixed horizon vs issue time, the 'forecast sharpens' curve."""
     cfg = cfg or EnsembleConfig(n_members=48)
     snaps = _evolve(bundle, issue_offsets_min, assimilate=True, cfg=cfg,
                     region_horizon=horizon, lead_horizon=horizon)

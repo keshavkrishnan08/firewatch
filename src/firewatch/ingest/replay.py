@@ -80,7 +80,7 @@ def build_event(event_id: str, store: Store) -> EventBundle:
     # 2) terrain (real) + fuels + wind
     d = dem.fetch_dem(lat0, lon0, half_extent_m=half_extent_m, cell_m=cell_m, event_id=event_id)
     if d is None:
-        log.warning("DEM unavailable — using flat terrain fallback")
+        log.warning("DEM unavailable, using flat terrain fallback")
         n = int(2 * half_extent_m / cell_m)
         from firewatch.terrain import DEM
 
@@ -139,7 +139,7 @@ def build_event(event_id: str, store: Store) -> EventBundle:
     store.put(fire)
     store.put_many(cams + zones + roads + structs + [weather] + obs_perims + obs)
 
-    note = (f"Live COP for '{name}' — forecast forward from the current NIFC perimeter. "
+    note = (f"Live COP for '{name}', forecast forward from the current NIFC perimeter. "
             f"Terrain: {'real (Terrain Tiles)' if d.elevation.std() > 1 else 'flat fallback'}; "
             f"wind: {wind['source']}; fuels: {fuelinfo['source']}. "
             f"Ablation/skill require a pre-registered retrospective with a perimeter time-series "

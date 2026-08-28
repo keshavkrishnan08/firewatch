@@ -1,9 +1,9 @@
-"""Learned spread surrogate (FR-FC-5) — a small CNN that emulates the physical MTT prior.
+"""Learned spread surrogate (FR-FC-5), a small CNN that emulates the physical MTT prior.
 
 The surrogate is a fully-convolutional network trained by self-distillation: it learns to reproduce
 the Minimum-Travel-Time arrival field of the Rothermel physical model from the model's own input
 channels (ROS magnitude, head direction, eccentricity, and the ignition distance transform). At
-inference it predicts the arrival field in a single forward pass — a fast approximate prior — while
+inference it predicts the arrival field in a single forward pass, a fast approximate prior, while
 the assimilation + calibration loop (the actual contribution) stays unchanged. `make train` trains it
 on **real California landscapes** (real DEM + ESA WorldCover fuels sampled from `firewatch.landscapes`);
 only the wind/moisture forcings are randomized, exactly as an ensemble perturbs them. Honesty

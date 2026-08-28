@@ -1,7 +1,7 @@
 """Read-only natural-language query over the ontology (FR-API-3, stretch).
 
 Deliberately thin: a small intent parser maps plain-English questions to read-only ontology queries
-and returns answers that **cite the object ids** they came from. No writes, no autonomous action —
+and returns answers that **cite the object ids** they came from. No writes, no autonomous action -
 just a convenience over the source of truth (CLAUDE.md: the NL layer is a flourish, not the substance).
 """
 from __future__ import annotations
@@ -56,13 +56,13 @@ def answer_query(store: Store, question: str, at: datetime | None = None) -> dic
         for o in obs:
             kinds[o.kind.value] = kinds.get(o.kind.value, 0) + 1
         return {"question": question,
-                "answer": f"{len(obs)} observations assimilated — " + ", ".join(f"{k}: {v}" for k, v in kinds.items()),
+                "answer": f"{len(obs)} observations assimilated, " + ", ".join(f"{k}: {v}" for k, v in kinds.items()),
                 "cites": cite(obs[:10])}
     # fire status
     if "fire" in q or "status" in q:
         fires = store.state_at("Fire", at)
         return {"question": question,
-                "answer": "; ".join(f"{f.name} — status {f.status.value}" for f in fires) or "no fire on record",
+                "answer": "; ".join(f"{f.name}, status {f.status.value}" for f in fires) or "no fire on record",
                 "cites": cite(fires)}
 
     return {
