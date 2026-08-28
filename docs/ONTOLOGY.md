@@ -1,6 +1,6 @@
-*Part of the FIREWATCH spec — see [`../CLAUDE.md`](../CLAUDE.md) and [`../context.md`](../context.md).*
+*Part of the FIREWATCH spec, see [`../CLAUDE.md`](../CLAUDE.md) and [`../context.md`](../context.md).*
 
-# FIREWATCH — Ontology (objects · links · actions)
+# FIREWATCH, Ontology (objects · links · actions)
 
 The ontology is the spine of FIREWATCH and the single source of truth. Every module reads and writes these objects; nothing passes raw feed payloads around. This is deliberately Foundry-shaped: **objects** (nouns), **links** (relationships), **actions** (the verbs that change state, logged with their evidence). If a reviewer asks "how is this different from a model," the answer is: *this.*
 
@@ -25,20 +25,20 @@ All objects are **time-stamped and versioned** so state is reconstructable at an
 | **Recommendation** | `id`, `kind{evacuate,close_road,stage}`, `target`, `lead_time`, `confidence`, `evidence[]`, `issued_at` | The decision-layer output. Human-in-the-loop; `evidence[]` links the objects that justify it. |
 
 ## Links
-- `Fire` —has→ `FirePerimeter[]`, `Observation[]`, `Forecast[]`
-- `Observation` —from→ `Camera` | (satellite product) | (official source)
-- `Camera` —sees→ `Fire` (when a plume is georeferenced into the fire's area)
-- `Forecast` —threatens→ `Structure[]` | `PopulationZone[]` | `RoadSegment[]` (prob over threshold within horizon)
-- `Recommendation` —protects→ `PopulationZone` | `RoadSegment`; —justified_by→ `Observation[]`/`Forecast`
-- `TerrainCell`/`FuelCell`/`WeatherCell` —force→ `Forecast` (inputs to spread ROS)
+- `Fire` -has→ `FirePerimeter[]`, `Observation[]`, `Forecast[]`
+- `Observation` -from→ `Camera` | (satellite product) | (official source)
+- `Camera` -sees→ `Fire` (when a plume is georeferenced into the fire's area)
+- `Forecast` -threatens→ `Structure[]` | `PopulationZone[]` | `RoadSegment[]` (prob over threshold within horizon)
+- `Recommendation` -protects→ `PopulationZone` | `RoadSegment`; -justified_by→ `Observation[]`/`Forecast`
+- `TerrainCell`/`FuelCell`/`WeatherCell` -force→ `Forecast` (inputs to spread ROS)
 
 ## Actions (verbs; each logged with evidence + issuing agent = human)
-- `ingest_observation(obs)` — write an Observation (with provenance).
-- `assimilate()` — run one filter update; produces/updates `Forecast` objects.
-- `georeference_camera_front(camera, mask)` — emit a `camera_front` Observation + uncertainty.
-- `recommend_evacuation(zone)` — create a `Recommendation` with lead-time, confidence, evidence.
-- `recommend_road_closure(segment)` / `recommend_staging(point)` — analogous.
-- `acknowledge/override(recommendation, user)` — human decision recorded (never automated).
+- `ingest_observation(obs)`, write an Observation (with provenance).
+- `assimilate()`, run one filter update; produces/updates `Forecast` objects.
+- `georeference_camera_front(camera, mask)`, emit a `camera_front` Observation + uncertainty.
+- `recommend_evacuation(zone)`, create a `Recommendation` with lead-time, confidence, evidence.
+- `recommend_road_closure(segment)` / `recommend_staging(point)`, analogous.
+- `acknowledge/override(recommendation, user)`, human decision recorded (never automated).
 
 ## Why this matters for the pitch
 - **Integration story:** heterogeneous public feeds collapse into one queryable world model.

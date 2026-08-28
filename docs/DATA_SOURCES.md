@@ -1,6 +1,6 @@
-*Part of the FIREWATCH spec — see [`../CLAUDE.md`](../CLAUDE.md) and [`../context.md`](../context.md).*
+*Part of the FIREWATCH spec, see [`../CLAUDE.md`](../CLAUDE.md) and [`../context.md`](../context.md).*
 
-# FIREWATCH — Data Sources
+# FIREWATCH, Data Sources
 
 Every feed is free/public. This is the part that makes the project *buildable and verifiable*. Verify endpoints and terms at build time; treat resolutions/cadences below as planning figures. Access keys go in `.env` (see `.env.example`).
 
@@ -8,7 +8,7 @@ Legend: **O** = live observation for assimilation · **F** = forcing/static laye
 
 ## Observation feeds (drive the assimilation loop)
 
-### NASA FIRMS — active fire (VIIRS 375 m, MODIS 1 km) · **O, GT**
+### NASA FIRMS, active fire (VIIRS 375 m, MODIS 1 km) · **O, GT**
 - Near-real-time active-fire detections; area/CSV API with a free MAP_KEY.
 - VIIRS (S-NPP/NOAA-20/21) 375 m is the workhorse; a few overpasses/day → spatially good, temporally sparse.
 - Use: primary satellite observation for the filter; also historical time series for retrospectives.
@@ -16,7 +16,7 @@ Legend: **O** = live observation for assimilation · **F** = forcing/static laye
 ### GOES-R ABI Fire Detection & Characterization (FDC) · **O**
 - Geostationary (GOES-East/West) → **~5-minute CONUS cadence**; coarse pixels but dense in time.
 - Access via AWS S3 open buckets (`goes2go` helper); product level-2 FDC.
-- Use: high-cadence observation that keeps the forecast honest between VIIRS passes — the temporal backbone of "the forecast sharpens as observations arrive."
+- Use: high-cadence observation that keeps the forecast honest between VIIRS passes, the temporal backbone of "the forecast sharpens as observations arrive."
 
 ### ALERTCalifornia / ALERTWildfire tower cameras · **O (via perception)**
 - 1000+ geo-located PTZ/fixed cameras (CA focus; HPWREN heritage), publicly viewable imagery, ~1 frame/min, archived imagery accessible. Newer cams color+PTZ; some older mono/fixed.
@@ -29,25 +29,25 @@ Legend: **O** = live observation for assimilation · **F** = forcing/static laye
 
 ## Forcing & static layers (spread inputs)
 
-### NOAA HRRR — hourly high-res weather · **F**
+### NOAA HRRR, hourly high-res weather · **F**
 - 3 km CONUS, hourly, includes 10-m wind (u/v), RH, temperature; access via AWS S3 (`Herbie`).
 - Use: wind field for ROS + the dominant ensemble-perturbation variable.
 
-### RAWS — Remote Automated Weather Stations · **F**
+### RAWS, Remote Automated Weather Stations · **F**
 - Point weather obs; useful to nudge/verify HRRR locally.
 
-### USGS 3DEP / SRTM — digital elevation · **F**
-- 1–10 m (3DEP) / 30 m (SRTM) DEM → elevation/slope/aspect.
+### USGS 3DEP / SRTM, digital elevation · **F**
+- 1-10 m (3DEP) / 30 m (SRTM) DEM → elevation/slope/aspect.
 - Use: ROS slope term **and** the ray-cast surface for georeferencing (`perception/georeference.py`).
 
-### LANDFIRE — fuels & vegetation · **F**
+### LANDFIRE, fuels & vegetation · **F**
 - Fuel models, canopy cover/height, existing vegetation type at 30 m.
 - Use: fuel term of Rothermel ROS; fuel moisture is an ensemble-perturbed unknown.
 
 ## Assets (decision layer)
-### Building footprints — Microsoft Building Footprints / OSM · **A**
-### Population — US Census blocks · **A**
-### Roads — OpenStreetMap · **A**
+### Building footprints, Microsoft Building Footprints / OSM · **A**
+### Population, US Census blocks · **A**
+### Roads, OpenStreetMap · **A**
 - Use: exposure (structures/people over the forecast horizon), egress-route graph + threat timing, safe staging candidates.
 
 ## Datasets for training / eval (offline)
@@ -69,7 +69,7 @@ Pick during M1 once availability is confirmed. Requirements for a good replay fi
 3. **Rich GOES/VIIRS active-fire history** over the burn period.
 4. Terrain/wind interest (so assimilation visibly matters), and enough documentation to reconstruct the *actual* decision timeline (for the "moved-the-needle" comparison).
 
-Target 1–2 well-documented recent California fires meeting all four. Do **not** hand-pick a fire where the method happens to look good — pre-register the fire and horizons before scoring.
+Target 1-2 well-documented recent California fires meeting all four. Do **not** hand-pick a fire where the method happens to look good, pre-register the fire and horizons before scoring.
 
 ## Access hygiene
 - Keys/tokens in `.env` only; `.env.example` lists names, never values. Never commit secrets.

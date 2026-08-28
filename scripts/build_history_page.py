@@ -220,7 +220,7 @@ function vd(src,poster,label){return src?`<figure style="margin:0">
 function play(){document.querySelectorAll('video').forEach(v=>{v.muted=true;const p=v.play();if(p&&p.catch)p.catch(()=>{});});}
 const chip=(v,l)=>`<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
 const livesRange=r=>{const a=Math.round(r*LIVES_UPLIFT[0]),b=Math.round(r*LIVES_UPLIFT[1]);
-  return a>0?`${a}–${b}`:(b>0?`up to ${b}`:'<1');};
+  return a>0?`${a}-${b}`:(b>0?`up to ${b}`:'<1');};
 function estFor(e){const r=e.residents_at_risk||0,im=e.impact||{};
   const lives=livesRange(r);
   const nf=e.n_flagged||0;
@@ -414,7 +414,7 @@ function vOps(){
     <div class="h-sec">See what that adds up to across five fires</div>
     <div class="band">
       ${bs('<b>'+(flagged/1000).toFixed(0)+'K</b>',"residents in flagged communities")}
-      ${bs('<b>'+livesLo+'–'+livesHi+'</b>',"estimated lives protected by earlier warning")}
+      ${bs('<b>'+livesLo+'-'+livesHi+'</b>',"estimated lives protected by earlier warning")}
       ${bs('<b>'+forestKm2.toFixed(0)+'</b> km²',"wildland flagged ahead of the front")}
       ${bs('<b>+'+meanGain.toFixed(3)+'</b>',"forecast overlap gained from live data")}
     </div>
@@ -526,7 +526,7 @@ function vOnt(){const evs=FW.events;
         and timestamp. This is the audit trail behind the fire object.</p>
         <div class="card" style="padding:0;overflow-x:auto"><table>
           <thead><tr><th>Time (UTC)</th><th>Source</th><th>Product</th><th class="num">Native</th><th class="num">Pixels</th></tr></thead>
-          <tbody>${e.observations.slice(0,10).map(o=>`<tr><td>${esc(o.t_utc)}</td><td>${esc(o.source)}</td><td>${esc(o.product)}</td><td class="num">${o.resolution_m?o.resolution_m+' m':'—'}</td><td class="num">${o.n_pixels}</td></tr>`).join('')}</tbody>
+          <tbody>${e.observations.slice(0,10).map(o=>`<tr><td>${esc(o.t_utc)}</td><td>${esc(o.source)}</td><td>${esc(o.product)}</td><td class="num">${o.resolution_m?o.resolution_m+' m':'-'}</td><td class="num">${o.n_pixels}</td></tr>`).join('')}</tbody>
         </table></div>
         <p class="note">Showing ${Math.min(10,e.observations.length)} of ${e.observations.length} assimilated observations.</p></div>
     </div></div>`;}
@@ -596,9 +596,9 @@ function vDec(){const evs=FW.events;const av=a=>a.length?a.reduce((x,y)=>x+y,0)/
   const dec=(e.impact||{}).decision||{}, brief=(e.impact||{}).brief||[], issue=(e.impact||{}).issue_min||90, ev=e.evac||{};
   const sel=evs.map(x=>`<button class="oseg${x.key===e.key?' on':''}" onclick="decKey='${x.key}';vDec();play()">${esc(x.name)}</button>`).join('');
   const rows=brief.map(b=>`<tr><td>${esc(b.zone)}</td>
-    <td class="num hi">${b.p_reached!=null?Math.round(b.p_reached*100)+'%':'—'}</td>
-    <td class="num">${b.eta_med!=null?'+'+b.eta_med+' min':'—'}</td>
-    <td class="num">${(b.eta_lo!=null&&b.eta_hi!=null)?(b.eta_lo===b.eta_hi?'tight':('+'+b.eta_lo+' to +'+b.eta_hi)):'—'}</td>
+    <td class="num hi">${b.p_reached!=null?Math.round(b.p_reached*100)+'%':'-'}</td>
+    <td class="num">${b.eta_med!=null?'+'+b.eta_med+' min':'-'}</td>
+    <td class="num">${(b.eta_lo!=null&&b.eta_hi!=null)?(b.eta_lo===b.eta_hi?'tight':('+'+b.eta_lo+' to +'+b.eta_hi)):'-'}</td>
     <td class="num">${(b.residents||0).toLocaleString()}</td>
     <td>${b.reached?'<span class="ok">burned</span>':'<span class="dim">not reached in window</span>'}</td></tr>`).join('')
     ||'<tr><td colspan="6" style="color:var(--text-3)">No community crossed the threat threshold in this window.</td></tr>';
@@ -639,9 +639,9 @@ function vDec(){const evs=FW.events;const av=a=>a.length?a.reduce((x,y)=>x+y,0)/
         ${issue} minutes after the first satellite detection, naming the threatened communities before the
         fire reaches them.</p></div>
       <div class="card"><div class="un" style="color:var(--fire-2)">ACTUAL RESPONSE</div>
-        <h3 style="margin:4px 0 8px;font-size:18px">${esc(ev.community||'—')}</h3>
+        <h3 style="margin:4px 0 8px;font-size:18px">${esc(ev.community||'-')}</h3>
         <p style="margin:0;color:var(--text-2)">Mandatory evacuation order reported ${esc(ev.local||'(time not recorded)')}.
-        <span style="color:var(--text-3)">Source: ${esc(ev.source||'—')}. Approximate, for context.</span></p></div>
+        <span style="color:var(--text-3)">Source: ${esc(ev.source||'-')}. Approximate, for context.</span></p></div>
     </div>
     <div class="how" style="margin-top:22px"><h4>Read this honestly</h4><ul>
       <li>FIREWATCH informs a person, it never issues an evacuation order on its own.</li>

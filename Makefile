@@ -1,4 +1,4 @@
-# FIREWATCH — reproducible entrypoints.
+# FIREWATCH, reproducible entrypoints.
 # All headline artifacts regenerate from pinned public snapshots via `make replay`.
 
 PYTHON ?= .venv/bin/python
