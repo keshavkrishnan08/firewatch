@@ -114,7 +114,7 @@ def run_forecast(
     return res
 
 
-# ── skill metrics (shared by demo + retrospective) ───────────────────────────
+# skill metrics (shared by demo + retrospective)
 
 
 def truth_arrival(grid: FireGrid, ignition_lonlat, params: SpreadParams | None = None) -> np.ndarray:

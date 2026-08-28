@@ -191,7 +191,7 @@ def fetch_fuel(dem: DEM, event_id: str = "event", seed: int = 3, bbox: BBox | No
         log.info("fuels: real ESA WorldCover land-cover fuels, present: %s", sorted(set(np.unique(wc).tolist())))
         return {"fuel": wc, "moisture": 0.07, "source": "ESA WorldCover 10m land cover (Anderson-13 mapped)"}
 
-    # ── heuristic fallback (elevation/slope) ──────────────────────────────────
+    # heuristic fallback (elevation/slope)
     rng = np.random.default_rng(seed)
     elev = dem.elevation
     gy, gx = np.gradient(elev, dem.cell_m)

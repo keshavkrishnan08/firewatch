@@ -48,7 +48,7 @@ def load_if_available():
         return None
 
 
-# ── procedural training data: tower-cam frames with plume masks ──────────────────
+# procedural training data: tower-cam frames with plume masks
 
 
 def synth_smoke_frame(rng, W=256, H=192) -> tuple[np.ndarray, np.ndarray]:
@@ -157,7 +157,7 @@ def _dice_iou(pred, target):
     return float(inter / union) if union > 0 else 1.0
 
 
-# ── real wildfire imagery: Pyronear pyro-sdis (HuggingFace, keyless) ─────────────
+# real wildfire imagery: Pyronear pyro-sdis (HuggingFace, keyless)
 
 
 def _mask_from_boxes(img_bgr, boxes, W, H):

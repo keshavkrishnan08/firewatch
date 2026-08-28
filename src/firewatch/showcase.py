@@ -41,7 +41,7 @@ def _style(ax, title=None):
         ax.set_title(title, color=TXT, fontsize=11, loc="left", pad=8)
 
 
-# ── pipeline stages ──────────────────────────────────────────────────────────
+# pipeline stages
 
 
 PIPELINE = [
@@ -297,7 +297,7 @@ def pipeline_figures():
     return out
 
 
-# ── results graphs ───────────────────────────────────────────────────────────
+# results graphs
 
 
 def results_figures(events):
@@ -403,7 +403,7 @@ def results_figures(events):
     ax.set_ylabel("km²", color=MUT, fontsize=8)
     out["extent"] = save(fig, "extent")
 
-    # ── impact: communities flagged + warning lead time ──
+    # impact: communities flagged + warning lead time
     imp = [e.get("impact", {}) for e in events]
     # residents in communities the forecast flagged, per fire
     fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=BG); _style(ax, "Residents in communities the forecast flagged")
@@ -475,7 +475,7 @@ def results_figures(events):
     return out
 
 
-# ── demo video (overview) ────────────────────────────────────────────────────
+# demo video (overview)
 
 
 def demo_video(key="park"):

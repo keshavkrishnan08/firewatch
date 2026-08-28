@@ -55,7 +55,7 @@ class Store:
             "CREATE INDEX IF NOT EXISTS idx_ov_kind_id ON object_versions(kind, obj_id, valid_t);"
         )
 
-    # ── writes ────────────────────────────────────────────────────────────────
+    # writes
 
     def put(self, obj: OntologyObject) -> str:
         """Append a new version of `obj`. Returns the object id."""
@@ -80,7 +80,7 @@ class Store:
             n += 1
         return n
 
-    # ── reads (as-of-time) ──────────────────────────────────────────────────────
+    # reads (as-of-time)
 
     def _rehydrate(self, kind: str, rows: list[tuple]) -> list[OntologyObject]:
         cls = OBJECT_TYPES[kind]
@@ -125,7 +125,7 @@ class Store:
         ).fetchall()
         return self._rehydrate(kind, rows)
 
-    # ── introspection ───────────────────────────────────────────────────────────
+    # introspection
 
     def kinds(self) -> list[str]:
         rows = self.con.execute("SELECT DISTINCT kind FROM object_versions ORDER BY kind").fetchall()

@@ -40,7 +40,7 @@ def generate_figures(bundle, result: dict, sharpening: list[dict] | None = None)
     truth = bundle.truth_arrival
     out: dict = {"figures": {}, "metrics": {}}
 
-    # ── 1. ablation bar (IoU ON vs OFF) ─────────────────────────────────────────
+    # 1. ablation bar (IoU ON vs OFF)
     if truth is not None and "skill_on" in result:
         so, sf = result["skill_on"], result["skill_off"]
         hs = on.horizons
@@ -63,7 +63,7 @@ def generate_figures(bundle, result: dict, sharpening: list[dict] | None = None)
             for h in hs
         }
 
-    # ── 2. reliability diagram (pre/post temperature scaling) ────────────────────
+    # 2. reliability diagram (pre/post temperature scaling)
     if truth is not None:
         h = on.horizons[len(on.horizons) // 2]
         p = on.prob_fields[h].ravel()
@@ -93,7 +93,7 @@ def generate_figures(bundle, result: dict, sharpening: list[dict] | None = None)
             "coverage": coverage(on.prob_fields[h], burned_mask(truth, h)),
         }
 
-    # ── 3. sharpening curve ─────────────────────────────────────────────────────
+    # 3. sharpening curve
     if sharpening:
         xs = [s["issue_min"] for s in sharpening]
         area = [s["region90_area_km2"] for s in sharpening]
@@ -113,7 +113,7 @@ def generate_figures(bundle, result: dict, sharpening: list[dict] | None = None)
         out["figures"]["sharpening"] = str(pth)
         out["metrics"]["sharpening"] = sharpening
 
-    # ── 4. static COP preview map ───────────────────────────────────────────────
+    # 4. static COP preview map
     out["figures"]["cop_map"] = _cop_map(bundle, on, figdir)
 
     (paths.outputs / "metrics.json").write_text(json.dumps(out["metrics"], indent=2, default=str))

@@ -90,7 +90,7 @@ class ParticleFilter:
         # cell-center local coordinates (for point membership / rasterization)
         self._XX, self._YY = np.meshgrid(grid._xs, grid._ys)
 
-    # ── observation operator ────────────────────────────────────────────────────
+    # observation operator
 
     def _rasterize(self, geom_local: BaseGeometry) -> np.ndarray:
         """Boolean mask of cells whose centers fall inside a projected polygon."""
@@ -148,7 +148,7 @@ class ParticleFilter:
         d = self.distance(member, obs)
         return float(np.exp(-0.5 * (d / obs.sigma_m) ** 2))
 
-    # ── filter steps ────────────────────────────────────────────────────────────
+    # filter steps
 
     def update(self, ensemble: Ensemble, obs_batch: list[AssimObs]) -> None:
         """Reweight the ensemble against a batch of same-time observations; resample if degenerate."""

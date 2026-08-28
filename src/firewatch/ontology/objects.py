@@ -38,7 +38,7 @@ def _as_geojson(v: Any) -> dict | None:
     return v
 
 
-# ── enums ─────────────────────────────────────────────────────────────────────
+# enums
 
 
 class FireStatus(StrEnum):
@@ -75,7 +75,7 @@ class ResourceKind(StrEnum):
     air = "air"
 
 
-# ── base ──────────────────────────────────────────────────────────────────────
+# base
 
 
 class OntologyObject(BaseModel):
@@ -111,7 +111,7 @@ class Provenance(BaseModel):
     detail: dict[str, Any] = Field(default_factory=dict)
 
 
-# ── objects ───────────────────────────────────────────────────────────────────
+# objects
 
 
 class Fire(OntologyObject):
