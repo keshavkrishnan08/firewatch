@@ -1,4 +1,4 @@
-# FIREWATCH — Common Operating Picture (web)
+# FIREWATCH, Common Operating Picture (web)
 
 An operational, dark-themed **common operating picture** for the FIREWATCH wildfire
 forecasting system. It renders a single COP JSON document into a three-pane
@@ -30,7 +30,7 @@ GET ${API}/api/event/${eventId}/cop
 `GET ${API}/api/event/${eventId}/query?q=...` and shows the returned `answer`
 plus any cited ids.
 
-Everything on screen is driven by the fetched JSON — there is no hardcoded fire
+Everything on screen is driven by the fetched JSON, there is no hardcoded fire
 data. Null geometry fields (common at early horizons) and a missing `evaluation`
 block are handled gracefully.
 
@@ -56,13 +56,13 @@ npm run preview    # serve the production build locally
 
 ## Layout notes
 
-- **Header** — fire name + status, wind (arrow / speed / RH / temp), issued time,
+- **Header**, fire name + status, wind (arrow / speed / RH / temp), issued time,
   an `ASSIMILATION ON` badge, and the `+ΔIoU` ablation stat at +60 min when
   `evaluation.ablation` is present. A synthetic-data banner appears when
   `meta.note` mentions "synthetic".
-- **Map controls** — horizon selector (+15/+30/+60/+180), assimilation ON/OFF arm
+- **Map controls**, horizon selector (+15/+30/+60/+180), assimilation ON/OFF arm
   toggle, per-layer visibility switches, a probability-ramp legend, and a wind rose.
-- **Interactions** — hover any feature for a tooltip; click a camera (map or card)
+- **Interactions**, hover any feature for a tooltip; click a camera (map or card)
   to expand its frame + pose and fly to it; click any Decide recommendation to fly
   to and highlight its geometry; drag or play the timeline to filter observations by
   time and move through forecast horizons.
