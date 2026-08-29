@@ -312,7 +312,7 @@ function hitlDiagram(){const W=760,H=360,cx=W/2,cy=180,A=64;
 
 function vO(){const d=FW.events[0];
   app.innerHTML=`<div class="page">
-    <h1>See where a wildfire is going <b>before</b> it gets there.</h1>
+    <h1>See where a wildfire is going before it gets there.</h1>
     <p class="lede">FIREWATCH watches a wildfire from satellites, follows it as it grows, and predicts
     where it will spread next, then checks every prediction against what actually happened.</p>
     <div class="how"><h4>How to use this</h4>
