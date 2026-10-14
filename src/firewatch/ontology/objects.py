@@ -1,6 +1,6 @@
 """FIREWATCH ontology objects (Palantir-style nouns).
 
-The ontology is the single source of truth (CLAUDE.md / docs/ONTOLOGY.md). Every module reads and
+The ontology is the single source of truth (context.md / docs/ONTOLOGY.md). Every module reads and
 writes these objects; modules never exchange raw feed payloads. Objects are time-stamped and
 carry provenance where relevant, so state is reconstructable at any past instant and projectable
 to future instants.

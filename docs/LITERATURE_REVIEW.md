@@ -1,4 +1,4 @@
-*Part of the FIREWATCH spec, see [`../CLAUDE.md`](../CLAUDE.md) and [`../context.md`](../context.md). Full citations in [`REFERENCES.md`](REFERENCES.md).*
+*Part of the FIREWATCH spec, see [`../context.md`](../context.md). Full citations in [`REFERENCES.md`](REFERENCES.md).*
 
 # FIREWATCH, Literature Review & Gap Analysis
 

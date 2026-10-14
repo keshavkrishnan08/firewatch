@@ -7,7 +7,7 @@ inference it predicts the arrival field in a single forward pass, a fast approxi
 the assimilation + calibration loop (the actual contribution) stays unchanged. `make train` trains it
 on **real California landscapes** (real DEM + ESA WorldCover fuels sampled from `firewatch.landscapes`);
 only the wind/moisture forcings are randomized, exactly as an ensemble perturbs them. Honesty
-(CLAUDE.md): the emulation target is our physical model; WildfireSpreadTS/Next-Day pretraining is future work.
+(context.md): the emulation target is our physical model; WildfireSpreadTS/Next-Day pretraining is future work.
 
 Requires the `ml` extra (torch). Everything degrades gracefully if torch is absent.
 """

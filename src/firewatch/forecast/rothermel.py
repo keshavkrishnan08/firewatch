@@ -6,7 +6,7 @@ collected in Andrews (2018), "The Rothermel surface fire spread model and associ
 m/s together with an elliptical length-to-breadth ratio, from which `spread.py` derives ROS in any
 direction.
 
-Honesty note (CLAUDE.md principle 1): the goal is a *debuggable physical prior*, not to out-physics
+Honesty note (context.md principle 1): the goal is a *debuggable physical prior*, not to out-physics
 WRF-SFIRE. Fuel-model constants are the standard published values; a unit test (tests/) checks a
 benchmark ROS against a known BehavePlus-style case to guard against transcription errors. The
 headline contribution is the assimilation that *corrects* this prior, not the prior itself.

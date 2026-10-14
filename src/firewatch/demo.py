@@ -3,7 +3,7 @@
 Builds a self-contained fire with terrain, cameras, evacuation zones, egress roads, structures, and
 a synthetic 'truth' fire from which we sample GOES/VIIRS hotspots, a camera-derived front (via the
 real detect→segment→georeference pipeline on a rendered frame), and an official perimeter. Every
-synthetic artifact is labeled as such (CLAUDE.md principle 2). This exercises the entire M1→M5 stack
+synthetic artifact is labeled as such (context.md principle 2). This exercises the entire M1→M5 stack
 end-to-end so the pipeline, decisions, calibration, and COP JSON are all reproducible offline.
 """
 from __future__ import annotations

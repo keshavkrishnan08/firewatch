@@ -203,7 +203,7 @@ retrospective. Each is independently demoable.
 
 ## 11. Dependencies & stack
 
-See `CLAUDE.md` (Tech stack) and `requirements.txt`. Everything free/open; single-GPU target.
+See `context.md` (Part 0, tech stack) and `requirements.txt`. Everything free/open; single-GPU target.
 
 ---
 

@@ -3,7 +3,7 @@
 These are thin, auditable wrappers over the store. The heavier verbs (`assimilate`,
 `georeference_camera_front`, `recommend_*`) live in their own modules (forecast/, perception/,
 decision/) and emit ontology objects; the helpers here cover ingestion and the *human* decisions
-(acknowledge / override), which are never automated (CLAUDE.md guardrail).
+(acknowledge / override), which are never automated (context.md guardrail).
 """
 from __future__ import annotations
 

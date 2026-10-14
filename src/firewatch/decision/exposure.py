@@ -3,7 +3,7 @@
 Everything the decision modules need reduces to: which grid cells does an asset (zone / road /
 structure) occupy, and what is the ensemble's *arrival-time distribution* into those cells. From
 that distribution we get burn probability by any horizon, a lead-time, and a confidence band -
-all with the ensemble spread carried through (uncertainty is first-class, CLAUDE.md principle 4).
+all with the ensemble spread carried through (uncertainty is first-class, context.md principle 4).
 """
 from __future__ import annotations
 

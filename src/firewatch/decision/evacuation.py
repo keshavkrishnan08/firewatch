@@ -4,7 +4,7 @@ For each PopulationZone we compute the ensemble arrival-time distribution into t
 the time until burn-probability crosses a threshold (the lead-time), a confidence band from the
 ensemble spread, and an urgency score to rank zones. Every output is a `Recommendation` carrying
 lead_time, confidence, and `evidence[]` (the Forecast + Observations that justify it). Human-in-the-
-loop only, nothing here is phrased as an autonomous order (FR-DEC-5 / CLAUDE.md guardrail).
+loop only, nothing here is phrased as an autonomous order (FR-DEC-5 / context.md guardrail).
 """
 from __future__ import annotations
 

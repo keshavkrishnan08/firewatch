@@ -2,7 +2,7 @@
 
 Deliberately thin: a small intent parser maps plain-English questions to read-only ontology queries
 and returns answers that **cite the object ids** they came from. No writes, no autonomous action -
-just a convenience over the source of truth (CLAUDE.md: the NL layer is a flourish, not the substance).
+just a convenience over the source of truth (context.md: the NL layer is a flourish, not the substance).
 """
 from __future__ import annotations
 

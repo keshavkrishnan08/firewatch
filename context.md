@@ -10,9 +10,8 @@ architecture, ontology, data sources, roadmap, evaluation, references) plus the 
 one self-contained document. Positioning: **integration → assimilation → decision**, not "another
 wildfire detector."*
 
-> This `context.md` is the single-file master. `CLAUDE.md` is the operating manual (Part 0) and the
-> `docs/` tree is the authoritative split (Parts 1-8). If you only read one file, read `CLAUDE.md`,
-> then `docs/PRD.md`.
+> This `context.md` is the single-file master, and the `docs/` tree is the authoritative split
+> (Parts 1-8). If you only read one file, read Part 0 below, then `docs/PRD.md`.
 
 ---
 
@@ -35,7 +34,7 @@ wildfire detector."*
 
 ## Part 0, Working Context (operating manual)
 
-> Read this first. This file is the operating manual for anyone (human or Claude Code)
+> Read this first. This file is the operating manual for anyone
 > working in this repo. If you only read one file, read this one, then open `docs/PRD.md`.
 
 ### What FIREWATCH is (one paragraph)

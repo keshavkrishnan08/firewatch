@@ -1,6 +1,6 @@
 """Geometry & projection helpers shared across FIREWATCH.
 
-Storage convention (see CLAUDE.md): all geometry is stored as GeoJSON-style mappings in
+Storage convention (see context.md): all geometry is stored as GeoJSON-style mappings in
 EPSG:4326 (lon, lat order). Metric math is done in a *local* azimuthal-equidistant projection
 centered on the fire, so distances/areas are in meters over the small single-fire domain.
 

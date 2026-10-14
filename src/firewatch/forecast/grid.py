@@ -120,7 +120,7 @@ def synthetic_grid(
 ) -> FireGrid:
     """A plausible ridge-and-valley terrain with mixed fuels and a uniform wind, for the demo.
 
-    Everything is clearly synthetic (CLAUDE.md principle 2); the demo labels it as such.
+    Everything is clearly synthetic (context.md principle 2); the demo labels it as such.
     """
     rng = np.random.default_rng(seed)
     ys, xs = np.mgrid[0:n, 0:n].astype(float)  # xs = column (east), ys = row (north)
