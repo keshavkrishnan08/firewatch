@@ -1,257 +1,213 @@
-# 🔥 FIREWATCH
+# FIREWATCH
 
-**A real-time wildfire common operating picture: fuse camera + satellite + weather + terrain into
-a continuously self-correcting probabilistic spread forecast, and turn it into human-in-the-loop
-evacuation and resource decisions, validated by replaying real fires.**
+**A wildfire common operating picture. It assimilates satellite and camera observations into a
+calibrated spread forecast and turns that forecast into evacuation, egress, and staging
+recommendations that a person approves.**
 
-FIREWATCH is deliberately *not* another wildfire detector. Detection is a commodity and just an
-input. The contribution is **integration → assimilation → decision**: model the world as an
-ontology of fires, sensors, and threatened assets; assimilate live observations into a *calibrated*
-forecast; and drive auditable decisions with lead-time and uncertainty.
+![Bar chart of the mean perimeter IoU gained by assimilating GOES-18 observations on five real fires: Park, Palisades, Eaton, Davis, and Gray. The gain is positive on every fire, from about 0.01 on Palisades to about 0.13 on Gray.](docs/assets/result_improvement.png)
 
-> **Status: working end-to-end**, on a reproducible offline synthetic replay, on live public data
-> for a real active fire, *and* scored against a **pre-registered retrospective on five real historical
-> fires** (Park, Palisades, Eaton, Davis, Gray, across California, Nevada and Washington) with
-> GOES-observed ground truth. Terrain, fuels (ESA WorldCover / LANDFIRE),
-> and wind (HRRR/NWS) are real; the learned spread surrogate and smoke segmenter are **real trained
-> torch models** (`make train`). Numbers are labeled *synthetic* vs *real* throughout, honesty over
-> hype is a project principle, not a slogan (see `CLAUDE.md`).
+Detecting a wildfire is a solved input. Knowing where it will be in three hours, how sure you can
+be, and which town to move first is the hard part. Physics-based forecasters can correct
+themselves from observations, but they live inside HPC-scale coupled simulators. Open ML models
+are accessible, but they are single-shot, next-day, uncalibrated, and stop at a map. FIREWATCH
+sits between the two: a transparent physical ensemble on a single machine, corrected by every new
+satellite or camera observation, scored for calibration, and wrapped in a decision layer that
+cites its evidence.
 
-> ### ▶ The FIREWATCH instrument
-> A single **self-contained interactive page**, [`docs/history.html`](docs/history.html) (`make history`
-> regenerates it; serve `docs/` or open it directly), walks the whole system on **five real fires**
-> across California, Nevada and Washington:
-> **Fires** (annotated satellite + forecast time-lapses) · **How it works** (the eight-stage pipeline) ·
-> **Ontology** (one fire as a linked object/link/action graph with a provenance ledger) ·
-> **Decision** (the incident-commander brief, verified against ground truth) ·
-> **Retrospective** (the causal replay, warning lead time, and calibrated coverage) · **Results**.
+Live instrument: **https://keshavkrishnan08.github.io/firewatch/**
 
-### The common operating picture
+```
+public feeds (GOES-18, FIRMS VIIRS/MODIS, HRRR/NWS wind, terrain, fuels, NIFC perimeters, OSM)
+    ->  time-versioned ontology (DuckDB; every object has provenance and a valid time)
+    ->  camera smoke -> georeferenced fire front with an uncertainty region
+    ->  Rothermel + minimum-travel-time ensemble (perturbed wind, moisture, ignition, ROS)
+    ->  particle-filter assimilation of hotspots, camera fronts, and perimeters
+    ->  calibrated burn probability at each horizon, with a 90% credible region
+    ->  ranked evacuations, threatened egress roads, staging points, exposure
+    ->  a human decides
+```
 
-The COP board (MapLibre + deck.gl), driven entirely by public data through the ontology, Observe
-(camera → detector → georeferenced front), Map (assimilated burn-probability bands, 90% region,
-observations, threatened zones/roads, camera view-cones), and Decide (ranked evacuations, egress,
-staging, exposure, NL query), with a time scrubber over the assimilation window:
+It recommends. A human decides.
 
-![FIREWATCH COP board, synthetic demo](docs/assets/cop_board.png)
+## The core idea
 
-And the **same system on a real, currently-active fire**, located via NIFC, real terrain + NWS
-wind + OSM assets, forecasting forward from the official perimeter (purple), with real egress routes
-flagged by threat:
+1. **Detection is an input, not the product.** Smoke detection uses off-the-shelf YOLO / RT-DETR
+   and SAM 2, with a classical-CV fallback so the pipeline runs without a GPU. The work is in what
+   happens after.
+2. **The forecast corrects itself.** Each ensemble member is a particle. When a GOES or VIIRS
+   hotspot, a camera front, or an official perimeter arrives, members are reweighted by how well
+   their predicted burned area matches it, and resampled with parameter jitter when the effective
+   sample size drops below half. A particle filter only ever reweights physically run members, so
+   it cannot invent spurious fires the way an unconstrained EnKF update can.
+3. **Probabilities have to mean what they say.** Reliability, Brier, CRPS, and empirical coverage
+   of the 90% region are first-class outputs. When the real-fire ensemble came out too tight, the
+   fix was a fast-tail spread mixture plus leave-one-out region calibration across fires, and both
+   the raw and the calibrated coverage are reported.
+4. **The ontology is the bus.** Modules never pass raw feed payloads to each other. They read and
+   write versioned objects (Fire, Observation, Camera, Zone, Road, Forecast, Recommendation). The
+   time scrubber and the retrospective replay are just "as of" queries, so a forecast issued at
+   time t cannot see data from after t. A unit test enforces this.
+5. **Decisions carry evidence.** Every recommendation has a lead time, a confidence, and an
+   evidence trail back to the forecast and observations behind it. Nothing is phrased as an order.
 
-![FIREWATCH COP board, live real fire](docs/assets/cop_board_timber.png)
+## What it does (measured on five real fires, GOES-18 ground truth)
 
----
+Pre-registered before scoring: Park (CA, 2024), Palisades and Eaton (CA, 2025), Davis (NV, 2024),
+and Gray (WA, 2023). Truth is the GOES-18 ABI active-fire progression. Assimilation uses the first
+180 minutes; skill is scored on the held-out window at +210, +240, +300, and +360 minutes.
 
-## Why this is different
-
-Two research communities barely talk to each other:
-
-- **Physics + data assimilation** can continuously correct a fire forecast from observations, but
-  it's locked inside HPC-scale coupled atmosphere-fire simulators.
-- **Data-driven ML** has accessible open datasets, but its models are single-shot, next-day,
-  offline, and stop at a prediction map with no calibration and no decisions.
-
-FIREWATCH bridges them: **a lightweight, real-time, single-GPU forecaster that assimilates fused
-camera + satellite observations into a *calibrated* probabilistic perimeter, wrapped in a decision
-layer.** None of the individual pieces are new; the bridge and the operational packaging are. See
-[`docs/LITERATURE_REVIEW.md`](docs/LITERATURE_REVIEW.md) for the full, honest gap analysis.
-
-## What it does
-
-1. **Integrate** public feeds (NASA FIRMS, GOES active fire, NOAA HRRR, USGS DEM, LANDFIRE, NIFC
-   perimeters, ALERTCalifornia cameras, OSM/Census assets) into one time-versioned **ontology**.
-2. **Perceive** smoke/flame on tower cameras (YOLO/RT-DETR + SAM2, with a classical-CV fallback so
-   the pipeline runs without a GPU).
-3. **Georeference** the camera plume onto terrain → a fire front at **lat/lon + uncertainty cone**,
-   with skyline self-calibration for imprecise PTZ tilt *(novelty 1)*.
-4. **Forecast** spread with a Rothermel + minimum-travel-time ensemble that **assimilates**
-   GOES/VIIRS/camera observations via a regularized particle filter → a calibrated burn-probability
-   field at +15/+30/+60/+180 min that **sharpens as observations arrive** *(research core)*.
-5. **Decide**, reconstruct the incident-commander brief at forecast issue (communities ranked by
-   projected arrival, with an 80% window and confidence), then **verify it against GOES truth**:
-   across the five fires the flag runs at ~**88% precision / 82% recall**, it names the communities
-   that go on to burn. Every recommendation is traceable to its evidence, and human-in-the-loop.
-
-## Proof, not vibes
-
-The whole point is measured skill + calibration, reproducibly:
-
-| Metric | What it shows | Status |
+| Capability | Metric | Result |
 |---|---|---|
-| **Assimilation ON vs OFF** (perimeter IoU) | the central thesis: obs sharpen the forecast | **synthetic demo:** mean IoU **0.12 → 0.56** (+0.42 beyond last obs) · **five real fires (GOES truth):** **+0.01 to +0.13** mean-IoU gain, positive on every fire (honest, modest, GOES is coarse) |
-| **Decision quality** (does it flag the right places?) | the "changes a decision" number | **measured on five real fires (GOES truth):** the reconstructed decision brief flags the communities that actually burn at ~**88% precision / 82% recall**, from a forecast issued ~90 min into the fire, verified per-fire in the **Decision** tab |
-| **Calibration** (reliability, Brier, coverage) | probabilities mean what they say | **measured** on demo *and* the real retrospective: raw 90% coverage ~**0.68** (over-confident) → **~0.87** after fast-tail spread widening + leave-one-out region calibration; both reported |
-| **Georeferencing** ground error vs perimeter | camera→map is accurate enough to use | **measured:** 0 m clear-LOS round-trip; skyline self-cal cuts a 1.5° tilt error's 2370 m → ~0 m; 2-cam triangulation ~18 m |
-| **Learned surrogate & smoke segmenter** | real torch models on **real** data | **measured** (`make train`): surrogate (trained on **12 real CA landscapes**) **reached-cell MAE ~39 min**, **~9× faster** than MTT; smoke U-Net (trained on **real Pyronear imagery**) **val mask-IoU 0.30**, honest on genuinely hard real smoke |
-| **Warning lead time** | how much earlier a community is flagged than the fire arrives | **synthetic demo:** ~71 min earlier than baseline · **real fires:** measurable where the fire runs into a community *after* forecast issue (e.g. Palisades' Las Flores **+186 min**, Gray's Silver Lake **+36 min**); near-ignition communities are already burning at issue and are reported honestly as such |
+| Assimilation, real fires | mean perimeter IoU gain, assimilation on vs off | **+0.01 to +0.13**, positive on all five fires |
+| Decision brief, real fires | mean precision / recall of flagged communities, forecast issued 90 min in | **0.88 / 0.82** |
+| Calibration, real fires | mean coverage of the 90% region, raw to calibrated | 0.68 to **0.86** |
+| Warning lead time, real fires | flag time before GOES-observed arrival | Las Flores (Palisades) **+186 min**, Silver Lake (Gray) **+36 min** |
+| Assimilation, synthetic replay | mean perimeter IoU, off to on | 0.12 to **0.56** |
+| Warning lead time, synthetic replay | threatened zone flagged before arrival | about 71 min; the no-assimilation baseline never flags it |
+| Georeferencing, synthetic geometry | skyline self-calibration of a 1.5 degree tilt error; two-camera fix | 2,370 m to about 0 m; about 18 m |
+| Learned spread surrogate | reached-cell MAE over 0 to 180 min; +60 min IoU; speed vs MTT | about 39 min; about 0.52; about 9x faster |
+| Learned smoke U-Net (Pyronear `pyro-sdis`) | validation mask IoU | 0.30 |
 
-Everything regenerates from pinned inputs with one command:
+Per fire (mean over the four horizons):
 
-```bash
-make demo                    # fully-offline synthetic event, end-to-end, no keys, no network
-make replay FIRE=<event_id>  # reproduce the full picture for a real fire
-```
+| Fire | IoU off | IoU on | Gain | 90% coverage raw / calibrated | Decision precision / recall |
+|---|---|---|---|---|---|
+| Park (2024) | 0.158 | 0.186 | +0.027 | 0.51 / 0.76 | 1.00 / 0.50 |
+| Palisades (2025) | 0.221 | 0.231 | +0.010 | 0.63 / 0.88 | 1.00 / 0.84 |
+| Eaton (2025) | 0.216 | 0.269 | +0.053 | 0.82 / 0.89 | 0.89 / 0.94 |
+| Davis (2024) | 0.239 | 0.316 | +0.077 | 0.65 / 0.86 | 0.84 / 1.00 |
+| Gray (2023) | 0.209 | **0.337** | **+0.128** | 0.81 / 0.95 | 0.67 / 0.80 |
 
-## Results (reproducible synthetic replay, run `make demo`)
+The central claim holds on real data: correcting the ensemble with observations beats the same
+ensemble without them on every fire. The gains are modest because GOES pixels are about 2 km and
+only a few detections fall in the early assimilation window. The protocol is in
+`docs/EVALUATION.md` and the pre-registration is in `docs/EVALUATION_PREREG.md`.
 
-*All figures below regenerate from pinned inputs; every synthetic artifact is labeled as such.*
+## How it works
 
-**The thesis, measured, assimilation ON vs OFF** (perimeter IoU vs truth at each horizon), and the
-COP preview where the assimilated forecast (red) tracks the truth perimeter (dashed) while the 90%
-region (blue) stays appropriately wider:
+**Ingest.** Connectors for NASA FIRMS (VIIRS/MODIS, needs a free key), GOES-18 ABI fire products
+and NOAA HRRR from AWS Open Data (keyless), USGS / AWS Terrain Tiles, LANDFIRE fuel models with
+an ESA WorldCover fallback, NIFC WFIGS perimeters, NWS wind, and OpenStreetMap places, roads, and
+buildings. Tower-camera poses load from a local `cameras.json`, because the ALERTCalifornia
+metadata API is access-gated. Every connector degrades gracefully, and provenance records which
+feeds were live and which fell back.
 
-| Assimilation ablation | Common operating picture (preview) |
-|---|---|
-| ![ablation](docs/assets/ablation_iou.png) | ![cop map](docs/assets/cop_map.png) |
+**Ontology.** An append-only DuckDB log of object versions keyed by kind, id, valid time, and
+sequence. Reads reconstruct the world as of any instant. Geometry is GeoJSON in EPSG:4326 with
+timezone-aware UTC timestamps.
 
-**Calibration is first-class** (reliability diagram + Brier, pre/post temperature scaling), and the
-**forecast sharpens as observations arrive** (90%-region area shrinks, IoU rises with each cycle):
+**Perception and georeferencing.** A detector and segmenter produce a smoke mask and per-frame
+features (area, centroid, bearing, growth, plume tilt as a wind proxy). Rays through the mask
+pixels are marched against the DEM to find the plume base on the ground. Pose and plume-base
+ambiguity become an uncertainty region by Monte Carlo sampling. Imprecise PTZ tilt is
+self-calibrated by matching the imaged skyline to the DEM horizon, and two or more cameras
+triangulate a tighter fix.
 
-| Calibration / reliability | Sharpening over time |
-|---|---|
-| ![reliability](docs/assets/reliability.png) | ![sharpening](docs/assets/sharpening.png) |
+**Tracking.** GOES fire pixels are clustered into fire objects with DBSCAN and associated across
+time by nearest centroid, giving a growth curve, rate of spread, and heading for each fire.
 
-**Perception → georeference** on a tower-cam frame (detector box + SAM2-style plume mask + smoke-state
-readout), and a **live COP on a real active fire** (the "Timber" fire, located via NIFC, real terrain
-+ NWS wind, forecast forward from the current perimeter):
+**Forecast.** Rothermel (1972) surface rate of spread over the 13 Anderson fuel models drives a
+multi-source Dijkstra minimum-travel-time solve with an elliptical directional spread, so one
+solve yields every horizon (+15, +30, +60, +180 min in the live and demo paths). The ensemble
+(60 members by default) perturbs wind speed and direction, fuel moisture, ignition location, and
+a global ROS multiplier. Burn probability is the weighted fraction of members that have burned a
+cell.
 
-| Observe pane (camera) | Live real fire (Timber) |
-|---|---|
-| ![observe](docs/assets/observe_frame.png) | ![timber](docs/assets/live_timber_cop.png) |
+**Assimilation.** A regularized particle filter with provenance-weighted observation error
+(defaults: GOES 2,000 m, MODIS 1,000 m, camera front 500 m, VIIRS 375 m, official perimeter
+120 m). Turning it off gives the baseline arm of the ablation.
 
-Headline numbers on the synthetic replay: mean perimeter **IoU 0.12 → 0.56** with assimilation
-(**+0.42** at horizons beyond the last observation); the 90% region is conservatively calibrated; and
-a threatened zone is flagged **~71 min before arrival** where the no-assimilation baseline never
-flags it.
+**Calibration.** Brier, CRPS, reliability diagrams, empirical coverage, and temperature scaling
+or isotonic recalibration, all in NumPy. For the real fires the ensemble adds a fast-tail mixture
+(45% of members drawn from a faster wind prior) and the credible-region threshold is set
+leave-one-out: the level that gives the other fires 90% coverage is applied to the held-out one.
 
-### Real-fire retrospective, 2024 Park Fire (pre-registered)
+**Decision.** The calibrated field is overlaid on population zones, buildings, and the road graph
+to produce ranked evacuation lead times with confidence bands, egress roads that close before
+their zones can clear, staging points outside the 90% region, and expected exposure. A small
+intent parser answers plain-English questions over the ontology and cites the object ids it used.
 
-The synthetic numbers show the method's ceiling; this shows its **honest real-world behavior**. On the
-2024 Park Fire, with **GOES-18 active-fire progression as ground truth** (real, keyless), terrain from
-Terrain Tiles, fuels from ESA WorldCover, and HRRR wind, pre-registered
-([`docs/EVALUATION_PREREG.md`](docs/EVALUATION_PREREG.md)) before scoring:
+**Learned models.** `make train` trains two PyTorch models (MPS, CUDA, or CPU). A
+fully-convolutional surrogate learns the Rothermel plus MTT arrival field by self-distillation on
+12 real California landscapes (real DEM and WorldCover fuels; only wind and moisture are
+randomized). A small U-Net segments smoke, trained on Pyronear `pyro-sdis` imagery with
+box-supervised masks refined by a smoke-likelihood field. Both fall back to labeled synthetic data
+when the sources are unreachable.
 
-The same COP board, on the real historical fire, GOES hotspots, the assimilated forecast, real
-Park-Fire-area roads (Richardson Springs Rd, Cohasset Rd) flagged as egress, and the honest
-`+0.02 ΔIoU vs baseline` header stat:
+**Front end.** The COP board is Vite, React, and TypeScript with MapLibre and deck.gl: an Observe
+pane (cameras and the observation feed), the map (probability bands, 90% region, perimeters,
+zones, roads, view cones), a Decide pane (ranked recommendations, exposure, the question box), and
+a time scrubber over the assimilation window. `docs/history.html` is a self-contained page that
+replays the five real fires across Fires, How it works, Ontology, Decision, Retrospective, and
+Results tabs.
 
-![FIREWATCH COP board, Park Fire retrospective](docs/assets/cop_board_retro.png)
-
-| Assimilation ablation (real GOES truth) | Forecast vs observed fire (dashed = GOES truth) |
-|---|---|
-| ![retro ablation](docs/assets/retro_ablation.png) | ![retro map](docs/assets/retro_cop_map.png) |
-
-Assimilation beats the no-assimilation baseline on **every fire** (mean-IoU gain **+0.01 to +0.13**
-across Park/Palisades/Eaton/Davis/Gray), modest to strong, because GOES is coarse (2 km) and only a
-few detections fall in the early assimilation window. The calibration analysis first surfaced
-**under-coverage** (a tight ensemble under-predicting explosive spread, truth extending beyond the
-forecast); the fix is a **fast-tail spread mixture** plus **leave-one-out region calibration** that
-lifts raw 90% coverage from ~0.68 to ~0.87, with the irreducible residual (patchy real perimeters at
-2 km) named rather than hidden. That kind of honest analysis is a feature: it points squarely at the
-remaining upgrades (finer VIIRS observations via a FIRMS key, better live fuel-moisture). This is what credible looks like
-on real data.
-
-### The FIREWATCH instrument, historical fire analysis (`make history`)
-
-A self-contained, dark, dense **scientific analysis tool** (in [`docs/history.html`](docs/history.html),
-`make history` regenerates it) that replays **five real historical wildfires** from GOES-18, across
-three states for geographic and size diversity: **Park** (California, 2024), **Palisades** and **Eaton**
-(California, 2025), **Davis** (Nevada, 2024) and **Gray** (Washington, 2023), all real locations,
-coordinates, dates and GOES-observed truth. Tabs:
-
-- **Fires**, the tracking + forecast time-lapses (autoplay) for the flagship fires, each with source
-  provenance (GOES-18 ABI-L2-FDCC), plus per-fire impact estimates and the step-by-step evolution stills.
-- **How it works**, the eight-stage pipeline, each with a real figure and an input→process→output diagram.
-- **Ontology**, one fire rendered as a Palantir-style **object/link/action graph** (feeds → observations
-  → fire → forecasts → communities → recommend, with a human-decides gate) plus the **provenance ledger**.
-- **Retrospective**, the causal replay: warning lead time community by community, the assimilation
-  ablation across all five fires, and **raw vs calibrated 90% coverage**.
-- **Results**, the per-horizon skill table (IoU baseline vs assimilation, Dice, Brier, coverage) and
-  the measurement graphs; **How it helps** frames the operational use.
-
-The tracker is real multi-object tracking (DBSCAN clustering of GOES fire pixels + nearest-centroid
-association); the fires are fused with the assimilating forecast over real terrain (Terrain Tiles),
-fuels (ESA WorldCover) and wind (HRRR). Assimilation beats the no-assimilation baseline on **every fire**
-(mean perimeter IoU), by **+0.01 to +0.13**, modest to strong, honest, real-data gains (GOES is coarse
-at ~2 km). The ensemble's 90% credible region, raw, was over-confident (~0.68 mean coverage); a fast-tail
-spread mixture plus **leave-one-out region calibration** lifts it to **~0.87**, with both numbers reported
-and the irreducible residual (patchy real perimeters at 2 km) named honestly.
-
-### Learned models (`make train`)
-
-Two **real trained torch models** (MPS/CUDA/CPU), by self-distillation, no external download:
-
-| Learned spread surrogate (emulates the physical solver) | Learned smoke segmenter (U-Net) |
-|---|---|
-| ![surrogate](docs/assets/surrogate.png) | ![smoke net](docs/assets/smoke_net.png) |
-
-Both models train on **real data** (`make train`). The surrogate emulates the Rothermel+MTT arrival
-field in one forward pass, trained on **12 real California landscapes** (real DEM + ESA WorldCover
-fuels; only wind/moisture are perturbed), a *fast approximate* prior (**reached-cell MAE ~39 min** over
-0-180 min, **+60-min IoU ~0.52**), **~9× faster** than sequential MTT for an ensemble; the assimilation
-loop then refines it and stays unchanged. The smoke U-Net trains on **real Pyronear `pyro-sdis`
-imagery** (HuggingFace, keyless; box-supervised masks refined by the smoke-likelihood field), **val
-mask-IoU 0.30**, an honest number on genuinely hard real smoke (faint plumes, clouds, weak labels). It
-replaces the classical fallback on the ML path for real frames; the offline synthetic demo uses
-classical CV. WildfireSpreadTS / SmokeyNet weights drop in via the same interface.
-
-These are demo (synthetic) headline numbers where noted, real-fire skill is the retrospective above;
-full protocol in [`docs/EVALUATION.md`](docs/EVALUATION.md).
-
-## Architecture (the ontology is the bus)
-
-```
-public feeds ─▶ INGEST ─▶┐
- cameras ─▶ PERCEPTION ─▶ ONTOLOGY (versioned source of truth) ─▶ FORECAST ─▶ DECISION ─▶ API ─▶ COP board
-                          │  Fire · Perimeter(t) · Observation · Camera · Weather ·        (assimilate)   (evac/routes/
-                          │  Terrain · Fuel · Structure · Zone · Road · Recommendation       + calibrate    staging)
-```
-
-Modules never exchange raw feed payloads, they read/write ontology objects. Every object is
-time-stamped and versioned, so the UI time-scrubber and the retrospective replay are just queries
-over object history (and no future data can leak into a past state, a causal-masking guarantee we
-test). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/ONTOLOGY.md`](docs/ONTOLOGY.md).
-
-## Milestones (each independently demoable)
-
-- **M1**, Live COP from public feeds *(integration; no ML)*
-- **M2**, Perception *(YOLO/RT-DETR + SAM2, classical fallback)*
-- **M3**, Georeferencing *(camera plume → lat/lon + uncertainty, novelty 1)*
-- **M4**, Assimilating spread forecast *(the research core; ON-vs-OFF ablation + calibration)*
-- **M5**, Decision layer + retrospective *(the "moved-the-needle" case study)*
-
-Full criteria in [`docs/ROADMAP.md`](docs/ROADMAP.md).
-
-## Quickstart
+## Run it
 
 ```bash
-git clone <repo> && cd firewatch
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"          # core (forecast/decision/georeference run on this alone)
-# optional live feeds: pip install -e ".[geo,sat,osm,perception]"
-cp .env.example .env             # add a free NASA FIRMS MAP_KEY for VIIRS/MODIS (optional)
+pip install -e ".[dev]"            # forecast, decision, and georeferencing run on this alone
+cp .env.example .env               # optional: a free NASA FIRMS MAP_KEY for VIIRS/MODIS
 
-make demo                        # build + run the offline synthetic event end-to-end
-make api                         # FastAPI backend  → http://localhost:8000
-make web                         # COP board (dev)  → http://localhost:5173
-make test                        # acceptance + unit tests
+make demo                          # fully offline synthetic event end to end, no keys, no network
+make test                          # acceptance and unit tests
+make api                           # FastAPI backend on http://localhost:8000
+make web                           # COP board on http://localhost:5173
 ```
 
-## Tech
+Real data needs the optional extras:
 
-Python 3.11+ (verified on 3.14). numpy/scipy forecast core; shapely/pyproj/rasterio/geopandas
-geospatial; goes2go + Herbie for GOES/HRRR from AWS Open Data; DuckDB + GeoParquet ontology store;
-FastAPI backend; MapLibre + deck.gl frontend. All data feeds are free/public; single-GPU target.
+```bash
+pip install -e ".[geo,sat,osm,perception,ml]"
+make replay FIRE=<event_id>        # live picture for a real fire (registry, event.json, or NIFC name lookup)
+make retrospective FIRE=park       # pre-registered retrospective on one fire
+make history                       # all five fires, then rebuild docs/history.html
+make train                         # spread surrogate and smoke U-Net
+```
 
-## Repository
+## Layout
 
-- [`CLAUDE.md`](CLAUDE.md), operating manual · [`context.md`](context.md), full consolidated spec
-- [`docs/PRD.md`](docs/PRD.md) · [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
-  [`docs/ONTOLOGY.md`](docs/ONTOLOGY.md) · [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md) ·
-  [`docs/EVALUATION.md`](docs/EVALUATION.md) · [`docs/REFERENCES.md`](docs/REFERENCES.md)
+```
+src/firewatch/
+  ingest/          FIRMS, GOES, HRRR, DEM, LANDFIRE/WorldCover, NIFC perimeters, cameras, OSM assets, live replay
+  ontology/        objects, actions, versioned DuckDB store
+  perception/      detector, segmenter, smoke U-Net, georeference, skyline self-cal, triangulation
+  forecast/        Rothermel, MTT spread, ensemble, particle filter, calibration, tracking, surrogate
+  decision/        evacuation, egress routing, staging, exposure, risk, decision quality
+  api/             FastAPI server, natural-language query, replay
+  pipeline.py      end-to-end event driver (assimilation on and off)
+  demo.py          offline synthetic event
+  retrospective.py pre-registered real-fire registry and scoring
+  historical.py    five-fire GOES tracking and forecast runs
+  showcase.py      figures and videos for the site
+  train.py         trains the learned models
+web/               COP board (Vite, React, MapLibre, deck.gl)
+docs/              history.html, PRD, architecture, ontology, data sources, evaluation, prereg, references
+docs/assets/       figures, stills, and videos used by the README and site
+scripts/           build_history_page.py
+tests/             40 tests: acceptance, Rothermel, spread and causal masking, assimilation, calibration,
+                   georeference, tracking, decision, ontology store, learned models
+```
 
-## License / data
+## Honesty
 
-Code: MIT. All data feeds are free/public; respect each source's terms. **FIREWATCH recommends; a
-human decides, it never issues autonomous orders.**
+* `outputs/` is not committed. The real-fire numbers above come from the data embedded in
+  `docs/history.html` and from `docs/EVALUATION.md`. `make history`, `make demo`, and `make train`
+  regenerate them.
+* Real-fire gains are small to moderate (+0.01 on Palisades). GOES pixels are about 2 km and few
+  detections land in the early window. Finer VIIRS observations need a FIRMS key.
+* The raw ensemble was over-confident (0.68 mean coverage of a 90% region). Calibration lifts it
+  to 0.86, still short of 0.90, and Park only reaches 0.76. Leave-one-out over five fires is a
+  small sample.
+* The 0.88 / 0.82 decision figures are means of per-fire precision and recall. Park recall is
+  0.50 and Gray precision is 0.67. Many communities were already burning when the forecast was
+  issued; their lead time is negative and is reported that way.
+* The synthetic replay (IoU 0.12 to 0.56, 71 min lead) is a simulated fire with known truth. It
+  shows the method's ceiling, not real-world skill.
+* The georeferencing numbers come from synthetic terrain and camera geometry. The real-fire
+  retrospective runs with no cameras, so the camera path is exercised only on the synthetic demo.
+* The surrogate learns to imitate this repo's physical model, not observed fire spread.
+* The history page shows a "lives protected" range. It is a planning estimate scaled from exposed
+  population, not a measured outcome.
+* This is decision support. It never issues evacuation orders on its own.
+
+MIT licensed (the LICENSE file adds a use note: a human makes every emergency decision).
