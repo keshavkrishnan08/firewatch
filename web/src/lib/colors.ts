@@ -69,8 +69,8 @@ export function urgencyLabel(urgency: number): string {
 
 // Observation kind -> color.
 export const OBS_COLORS: Record<string, RGBA> = {
-  goes: [255, 122, 89, 235], // GOES hotspots — warm red
-  viirs: [255, 196, 61, 235], // VIIRS — amber-yellow
+  goes: [255, 122, 89, 235], // GOES hotspots, warm red
+  viirs: [255, 196, 61, 235], // VIIRS, amber-yellow
   modis: [255, 150, 120, 235], // MODIS
   camera_front: [77, 214, 232, 255], // cyan
   official_perimeter: [190, 130, 246, 255], // violet
