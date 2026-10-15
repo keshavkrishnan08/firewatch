@@ -1,6 +1,6 @@
 # FIREWATCH pinned runtime + dev dependencies (Python 3.11+; verified on 3.14).
 # Regenerate intent with pyproject extras; this file pins exact versions for reproducibility (NFR-2).
-# Heavy ML perception (torch, ultralytics, sam2) is OPTIONAL — installed separately; see docs/DATA_SOURCES.md.
+# Heavy ML perception (torch, ultralytics, sam2) is OPTIONAL and installed separately; see docs/DATA_SOURCES.md.
 
 # --- core ---
 numpy==2.5.2

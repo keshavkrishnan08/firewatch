@@ -68,20 +68,27 @@ class FireTrack:
 
 
 def _cluster(points_lonlat: list[tuple[float, float]], eps_km: float = 4.0) -> list[list[tuple[float, float]]]:
-    """DBSCAN-cluster fire pixels into fire objects (falls back to a single cluster without sklearn)."""
+    """Cluster fire pixels into fire objects: pixels within ``eps_km`` of each other share a fire.
+
+    This is DBSCAN with ``min_samples=1``, which reduces to connected components of the
+    eps-neighbour graph, computed here with SciPy so clustering does not depend on scikit-learn.
+    Clusters come out in order of their first pixel, as DBSCAN labels them.
+    """
     if len(points_lonlat) <= 1:
         return [points_lonlat] if points_lonlat else []
-    try:
-        from sklearn.cluster import DBSCAN
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    from scipy.spatial import cKDTree
 
-        arr = np.array(points_lonlat)
-        clat = float(arr[:, 1].mean())
-        # scale lon/lat to km-ish for a metric eps
-        xy = np.column_stack([arr[:, 0] * 111.32 * np.cos(np.radians(clat)), arr[:, 1] * 110.57])
-        labels = DBSCAN(eps=eps_km, min_samples=1).fit_predict(xy)
-        return [[tuple(p) for p in arr[labels == k]] for k in sorted(set(labels))]
-    except Exception:
-        return [points_lonlat]
+    arr = np.array(points_lonlat)
+    clat = float(arr[:, 1].mean())
+    # scale lon/lat to km-ish for a metric eps
+    xy = np.column_stack([arr[:, 0] * 111.32 * np.cos(np.radians(clat)), arr[:, 1] * 110.57])
+    pairs = cKDTree(xy).query_pairs(eps_km, output_type="ndarray")
+    n = len(arr)
+    graph = coo_matrix((np.ones(len(pairs)), (pairs[:, 0], pairs[:, 1])), shape=(n, n))
+    _, labels = connected_components(graph, directed=False)
+    return [[tuple(p) for p in arr[labels == k]] for k in sorted(set(labels))]
 
 
 def track_from_observations(observations, ignition_time: datetime, pixel_km: float = 2.0) -> FireTrack:

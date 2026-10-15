@@ -27,6 +27,7 @@ dependencies = [
   "fastapi>=0.110",
   "uvicorn>=0.29",
   "python-dateutil>=2.8",
+  "matplotlib>=3.7",  # report figures; imported by the retrospective replay
 ]
 
 [project.optional-dependencies]
