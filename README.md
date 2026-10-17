@@ -210,4 +210,4 @@ tests/             40 tests: acceptance, Rothermel, spread and causal masking, a
   population, not a measured outcome.
 * This is decision support. It never issues evacuation orders on its own.
 
-MIT licensed (the LICENSE file adds a use note: a human makes every emergency decision).
+MIT licensed. NOTICE adds a use note: a human makes every emergency decision.

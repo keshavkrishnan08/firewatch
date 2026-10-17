@@ -1,0 +1,7 @@
+FIREWATCH
+Copyright (c) 2026 Keshav Krishnan
+Licensed under the MIT License (see LICENSE).
+
+Note on use: FIREWATCH produces decision *support* with calibrated uncertainty. It
+recommends; a human decides. It must never be operated as an autonomous system that
+issues evacuation orders or other emergency directives.
